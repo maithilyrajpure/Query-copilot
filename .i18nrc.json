@@ -1,0 +1,7 @@
+{
+  "prefix": "queryCopilot",
+  "paths": {
+    "queryCopilot": "."
+  },
+  "translations": ["translations/ja-JP.json"]
+}

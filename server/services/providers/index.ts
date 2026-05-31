@@ -21,3 +21,10 @@ export {
 
 // Base class
 export { BaseProvider } from './base.provider';
+
+// Concrete provider adapters
+export { GeminiProvider } from './gemini';
+export type { GeminiConfig } from './gemini';
+
+export { GroqProvider } from './groq';
+export type { GroqConfig } from './groq';

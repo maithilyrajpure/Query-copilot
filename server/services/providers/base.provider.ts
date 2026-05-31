@@ -120,8 +120,11 @@ export abstract class BaseProvider implements ILLMProvider {
       } catch (err) {
         state.lastError = err;
 
-        // Non-retryable ProviderErrors abort immediately — no point sleeping
-        if (err instanceof ProviderError && !err.retryable) {
+        // Non-retryable ProviderErrors abort immediately — no point sleeping.
+        // Rate-limit errors (retryable:true by type design) also abort here:
+        // the provider router should fall back to another provider rather than
+        // burning the timeout budget sleeping on a rate-limited key.
+        if (err instanceof ProviderError && (!err.retryable || err.statusCode === 429)) {
           throw err;
         }
 

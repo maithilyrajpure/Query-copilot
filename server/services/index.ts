@@ -1,3 +1,6 @@
 export { ConfigService } from './config';
 export type { RedactedQueryCopilotConfig } from './config';
 export { ProviderNotEnabledError, ProviderApiKeyMissingError } from './config';
+
+export { LoggerService, MetricsService } from './observability';
+export type { MetricsSummary, ProviderCallMetrics } from './observability';

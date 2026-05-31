@@ -1,4 +1,5 @@
 import type { IRouter } from '@kbn/core/server';
+import type { QueryCopilotContext } from '../types';
 import { registerHealthRoutes } from './health.routes';
 import { registerProviderRoutes } from './provider.routes';
 import { registerQueryRoutes } from './query.routes';
@@ -6,14 +7,12 @@ import { registerQueryRoutes } from './query.routes';
 /**
  * Registers all route groups with the Kibana router.
  *
- * Ordering convention: health → providers → query (coarse → fine-grained).
- * Add new route group registrations here as the plugin grows.
- *
- * Each register* function is responsible for its own path prefix, validation
- * schema, auth tags, and handler logic — this coordinator only wires them up.
+ * pluginContext is threaded through to every route group so handlers have
+ * access to config, structured logging, and metrics without reaching into
+ * module-level singletons.
  */
-export function defineRoutes(router: IRouter): void {
-  registerHealthRoutes(router);
-  registerProviderRoutes(router);
-  registerQueryRoutes(router);
+export function defineRoutes(router: IRouter, context: QueryCopilotContext): void {
+  registerHealthRoutes(router, context);
+  registerProviderRoutes(router, context);
+  registerQueryRoutes(router, context);
 }

@@ -8,6 +8,9 @@ export type { MetricsSummary, ProviderCallMetrics } from './observability';
 export { TokenEstimatorService } from './token';
 export type { ProviderTokenEstimate, TokenEstimationMethod } from './token';
 
+export { PricingRegistry, CostEstimatorService, formatCostUsd } from './cost';
+export type { ProviderPricing } from './cost';
+
 export { BaseProvider } from './providers';
 export type { ILLMProvider, ProviderPrompt, ProviderResponse, ProviderMetadata, ProviderRole } from './providers';
 export {

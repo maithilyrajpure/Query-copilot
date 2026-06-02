@@ -17,6 +17,11 @@ export interface GroqConfig {
    */
   readonly maxTokens: number;
   /**
+   * Total context window (input+output) for the configured model; used by the
+   * pre-flight overflow guard. Distinct from maxTokens (output cap).
+   */
+  readonly contextWindowTokens: number;
+  /**
    * Per-request timeout in milliseconds.
    * Passed to the Groq SDK ClientOptions.timeout so the SDK enforces it
    * at the HTTP layer, then also wrapped in BaseProvider.withTimeout() as

@@ -43,6 +43,22 @@ export const PROVIDER_MAX_TOKENS: Record<
   openai: 8192,
 } as const;
 
+/**
+ * Total context-window capacity (input + output) per provider's default model.
+ * Distinct from PROVIDER_MAX_TOKENS, which caps OUTPUT/completion tokens.
+ * Used by pre-flight context-overflow guards.
+ */
+export const PROVIDER_CONTEXT_WINDOW_TOKENS: Record<
+  (typeof PROVIDER_NAMES)[keyof typeof PROVIDER_NAMES],
+  number
+> = {
+  gemini: 1_048_576, // gemini-2.0-flash ~1M
+  groq: 131_072, // llama-3.3-70b-versatile 128K
+  ollama: 8_192, // llama3 default
+  anthropic: 200_000, // claude-3.5-sonnet
+  openai: 128_000, // gpt-4o
+} as const;
+
 export const PROVIDER_SUPPORTS_STREAMING: Record<
   (typeof PROVIDER_NAMES)[keyof typeof PROVIDER_NAMES],
   boolean

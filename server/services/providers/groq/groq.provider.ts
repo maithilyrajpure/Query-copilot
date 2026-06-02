@@ -99,13 +99,14 @@ export class GroqProvider extends BaseProvider {
     const estimatedInputTokens = this.estimateTokens(
       prompt.systemPrompt + '\n' + prompt.userMessage
     );
-    const maxTokens = prompt.maxTokens ?? this.config.maxTokens;
+    const maxOutputTokens = prompt.maxTokens ?? this.config.maxTokens;
+    const requiredTokens = estimatedInputTokens + maxOutputTokens;
 
-    if (estimatedInputTokens + maxTokens > this.config.maxTokens) {
+    if (requiredTokens > this.config.contextWindowTokens) {
       throw new ProviderContextOverflowError(
         PROVIDER_NAMES.GROQ,
-        estimatedInputTokens + maxTokens,
-        this.config.maxTokens
+        requiredTokens,
+        this.config.contextWindowTokens
       );
     }
 
@@ -115,7 +116,7 @@ export class GroqProvider extends BaseProvider {
     return this.retry(
       () =>
         this.withTimeout(
-          () => this.callChatCompletions(prompt, temperature, maxTokens),
+          () => this.callChatCompletions(prompt, temperature, maxOutputTokens),
           timeoutMs
         ),
       MAX_RETRIES,

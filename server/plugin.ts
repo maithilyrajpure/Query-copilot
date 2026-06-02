@@ -31,7 +31,7 @@ import {
 } from './services';
 import type { ILLMProvider } from './services';
 import type { ProviderName } from '../common';
-import { PROVIDER_NAMES } from '../common';
+import { PROVIDER_NAMES, PROVIDER_CONTEXT_WINDOW_TOKENS } from '../common';
 import { defineRoutes } from './routes';
 import type {
   GeminiConfig,
@@ -286,6 +286,7 @@ export class QueryCopilotPlugin
         apiKey: groqCfg.apiKey,
         model: groqCfg.model,
         maxTokens: 8192,
+        contextWindowTokens: PROVIDER_CONTEXT_WINDOW_TOKENS.groq,
         timeoutMs: 30_000,
         temperature: 0.2,
       };

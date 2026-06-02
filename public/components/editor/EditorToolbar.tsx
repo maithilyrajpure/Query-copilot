@@ -1,21 +1,18 @@
 import React from 'react';
 import { EuiButton, EuiButtonEmpty, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
 
+import { useCopilot } from '../../store/copilot.context';
+import { useQueryExecution } from '../../hooks/useQueryExecution';
+
 export interface EditorToolbarProps {
   isEditing: boolean;
   onToggleEdit: () => void;
-  onRun: () => void;
-  isRunning: boolean;
-  runDisabled?: boolean;
 }
 
-export const EditorToolbar: React.FC<EditorToolbarProps> = ({
-  isEditing,
-  onToggleEdit,
-  onRun,
-  isRunning,
-  runDisabled,
-}) => {
+export const EditorToolbar: React.FC<EditorToolbarProps> = ({ isEditing, onToggleEdit }) => {
+  const { state } = useCopilot();
+  const { executeQuery, isExecuting } = useQueryExecution();
+
   return (
     <EuiFlexGroup
       alignItems="center"
@@ -40,9 +37,11 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           color="primary"
           size="s"
           iconType="play"
-          onClick={onRun}
-          isLoading={isRunning}
-          disabled={Boolean(runDisabled) || isRunning}
+          isLoading={isExecuting}
+          disabled={isExecuting || state.currentKQL.trim().length === 0}
+          onClick={() => {
+            void executeQuery(state.currentKQL, state.indexPattern);
+          }}
           data-test-subj="queryCopilotEditorRunButton"
         >
           Run Query

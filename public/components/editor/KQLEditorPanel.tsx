@@ -21,7 +21,7 @@ import { ValidationFeedback } from './ValidationFeedback';
  * and validation state via CopilotContext.
  */
 export const KQLEditorPanel: React.FC = () => {
-  const { state, runQuery, dispatch } = useCopilot();
+  const { state, dispatch } = useCopilot();
   const { euiTheme } = useEuiTheme();
 
   // Editor is read-only until the user clicks Edit.
@@ -48,18 +48,7 @@ export const KQLEditorPanel: React.FC = () => {
           </EuiFlexGroup>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
-          <EditorToolbar
-            isEditing={isEditing}
-            onToggleEdit={() => setIsEditing((v) => !v)}
-            onRun={() => {
-              void runQuery();
-            }}
-            // NOTE: `isGenerating` is shared between chat generation and query
-            // execution — the store has no separate `isExecuting` flag, so the
-            // Run button's loading state reuses it (store is out of scope).
-            isRunning={state.isGenerating}
-            runDisabled={state.currentKQL.trim().length === 0}
-          />
+          <EditorToolbar isEditing={isEditing} onToggleEdit={() => setIsEditing((v) => !v)} />
         </EuiFlexItem>
       </EuiFlexGroup>
 

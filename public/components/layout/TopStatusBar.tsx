@@ -8,19 +8,33 @@ import {
   EuiIcon,
   EuiBadge,
   EuiAvatar,
+  useEuiTheme,
 } from '@elastic/eui';
+import { css } from '@emotion/react';
 
 interface TopStatusBarProps {
   statusBadge?: React.ReactNode;
 }
 
 /**
- * Horizontal status bar rendered above the split layout. Shows the application
- * title/subtitle on the left and a status badge plus the analyst avatar on the
- * right. The real status badge is wired in a later task; a neutral placeholder
- * is shown until then.
+ * Horizontal status bar rendered above the split layout. Shows a blue rounded
+ * logo square + the application title/subtitle on the left, and a status badge
+ * plus the analyst avatar on the right. The real status badge is wired in a
+ * later task; the success badge below is the default placeholder.
  */
 export const TopStatusBar: React.FC<TopStatusBarProps> = ({ statusBadge }) => {
+  const { euiTheme } = useEuiTheme();
+
+  const logoCss = css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: euiTheme.border.radius.medium,
+    backgroundColor: euiTheme.colors.primary,
+  });
+
   return (
     <EuiPanel
       hasShadow={false}
@@ -38,7 +52,9 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({ statusBadge }) => {
         <EuiFlexItem grow={false}>
           <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
             <EuiFlexItem grow={false}>
-              <EuiIcon type="logoSecurity" size="l" />
+              <div css={logoCss}>
+                <EuiIcon type="search" color="ghost" />
+              </div>
             </EuiFlexItem>
             <EuiFlexItem grow={false}>
               <EuiFlexGroup direction="column" gutterSize="none" responsive={false}>
@@ -60,10 +76,10 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({ statusBadge }) => {
         <EuiFlexItem grow={false}>
           <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
             <EuiFlexItem grow={false}>
-              {statusBadge ?? <EuiBadge color="hollow">Status</EuiBadge>}
+              {statusBadge ?? <EuiBadge color="success">All Systems Operational</EuiBadge>}
             </EuiFlexItem>
             <EuiFlexItem grow={false}>
-              <EuiAvatar name="Analyst" size="m" />
+              <EuiAvatar name="Analyst User" initials="AU" size="m" color={euiTheme.colors.primary} />
             </EuiFlexItem>
           </EuiFlexGroup>
         </EuiFlexItem>

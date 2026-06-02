@@ -19,6 +19,10 @@ interface SplitLayoutProps {
  * width, the right panel (KQL editor + output) fills the remaining ~60%. On
  * narrow viewports the columns stack vertically. Both panels scroll
  * independently when their content overflows.
+ *
+ * The columns read as separate white cards on a light-gray page: there is no
+ * hard divider line between them; instead the page is padded and the columns
+ * are separated by a gutter.
  */
 export const SplitLayout: React.FC<SplitLayoutProps> = ({ left, right }) => {
   const { euiTheme } = useEuiTheme();
@@ -26,18 +30,18 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({ left, right }) => {
 
   const leftCss = css({
     overflowY: 'auto',
+    minHeight: 0,
     ...(isStacked
       ? { width: '100%' }
       : {
           flexBasis: '40%',
           minWidth: 340,
-          borderRight: `${euiTheme.border.thin}`,
-          borderRightColor: euiTheme.colors.lightShade,
         }),
   });
 
   const rightCss = css({
     overflowY: 'auto',
+    minHeight: 0,
   });
 
   return (
@@ -46,9 +50,9 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({ left, right }) => {
       data-test-subj="queryCopilotSplitLayout"
       css={css({ height: '100%', flex: 1 })}
     >
-      <EuiPageBody paddingSize="none" css={css({ height: '100%' })}>
+      <EuiPageBody paddingSize="none" css={css({ height: '100%', padding: euiTheme.size.l })}>
         <EuiFlexGroup
-          gutterSize="none"
+          gutterSize="l"
           direction={isStacked ? 'column' : 'row'}
           responsive={false}
           css={css({ height: '100%' })}

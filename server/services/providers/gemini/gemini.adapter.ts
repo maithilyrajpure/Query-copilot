@@ -28,7 +28,7 @@ export class GeminiAdapter {
    * Maps a GenerateContentResult to the server-side ProviderResponse.
    *
    * @param sdkResponse  The EnhancedGenerateContentResponse from the SDK.
-   * @param model        The model string used in the request (e.g. "gemini-1.5-pro").
+   * @param model        The model string used in the request (e.g. "gemini-2.0-flash").
    * @param latencyMs    Wall-clock time from request dispatch to response receipt.
    * @param raw          The original SDK result — preserved for observability.
    */

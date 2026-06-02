@@ -23,7 +23,8 @@ export const PROVIDER_DEFAULT_MODELS: Record<
   (typeof PROVIDER_NAMES)[keyof typeof PROVIDER_NAMES],
   string
 > = {
-  gemini: 'gemini-1.5-pro',
+  // gemini-1.5-* retired from v1beta generateContent (404); 2.0-flash is the current GA default. Operators can override via query_copilot.providers.gemini.model; startup validation logs the models actually available to the configured key.
+  gemini: 'gemini-2.0-flash',
   groq: 'llama3-70b-8192',
   ollama: 'llama3',
   anthropic: 'claude-3-5-sonnet-20241022',

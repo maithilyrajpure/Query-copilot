@@ -12,7 +12,7 @@ export { PricingRegistry, CostEstimatorService, formatCostUsd } from './cost';
 export type { ProviderPricing } from './cost';
 
 export { BaseProvider } from './providers';
-export type { ILLMProvider, ProviderPrompt, ProviderResponse, ProviderMetadata, ProviderRole } from './providers';
+export type { ILLMProvider, ProviderPrompt, ProviderResponse, ProviderMetadata, ProviderRole, ProviderModelValidationResult } from './providers';
 export {
   ProviderError,
   ProviderRateLimitError,

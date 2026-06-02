@@ -1,4 +1,4 @@
-export type { ProviderPrompt, ProviderResponse, ProviderMetadata, ProviderRole, ILLMProvider } from './types';
+export type { ProviderPrompt, ProviderResponse, ProviderMetadata, ProviderRole, ILLMProvider, ProviderModelValidationResult } from './types';
 export {
   ProviderError,
   ProviderRateLimitError,

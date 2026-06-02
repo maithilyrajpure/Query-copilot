@@ -62,6 +62,7 @@ export class QueryCopilotPlugin
   private readonly initializerContext: PluginInitializerContext;
   private configService!: ConfigService;
   private healthMonitor!: HealthMonitor;
+  private providerMap?: ReadonlyMap<ProviderName, ILLMProvider>;
   private redisClient?: Redis;
 
   constructor(initializerContext: PluginInitializerContext) {
@@ -90,6 +91,7 @@ export class QueryCopilotPlugin
 
     // ── Provider instances ────────────────────────────────────────────────────
     const providerMap = this.buildProviderMap();
+    this.providerMap = providerMap;
 
     if (providerMap.size === 0) {
       this.logger.warn('queryCopilot: no providers are enabled — all LLM routes will fail');
@@ -177,11 +179,12 @@ export class QueryCopilotPlugin
     return {};
   }
 
-  public start(
+  public async start(
     _core: CoreStart,
     _deps: PluginStartDependencies
-  ): QueryCopilotPluginStart {
+  ): Promise<QueryCopilotPluginStart> {
     this.logger.info('queryCopilot: start');
+    await this.validateProviders();
     return {};
   }
 
@@ -196,6 +199,65 @@ export class QueryCopilotPlugin
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
+
+  /**
+   * Validates the configured model for every provider that can enumerate its
+   * available models (currently Gemini, via v1beta listModels). This runs at
+   * start() and is GRACEFUL: it never throws out of start() — Kibana must keep
+   * running and the router's fallback chain handles a single bad provider.
+   *
+   * Reconciliation of "graceful at startup" vs "typed ProviderUnavailableError
+   * during initialization": the provider CACHES a typed ProviderUnavailableError
+   * at validation time when discovery affirmatively reports its model is
+   * unavailable. That cached error is then thrown (without any network call) on
+   * the next complete(), and makes isHealthy() return false immediately. So the
+   * typed error is surfaced deterministically at request/health-check time
+   * rather than by crashing the plugin at boot.
+   */
+  private async validateProviders(): Promise<void> {
+    if (!this.providerMap) {
+      return;
+    }
+
+    for (const [name, provider] of this.providerMap) {
+      if (typeof provider.validateModelAvailability !== 'function') {
+        continue;
+      }
+
+      try {
+        const { configuredModel, available, supportedModels } =
+          await provider.validateModelAvailability();
+
+        this.logger.info(
+          `queryCopilot: provider ${name} model="${configuredModel}" available=${available}; ` +
+            `${supportedModels.length} generateContent models discovered`
+        );
+
+        if (supportedModels.length) {
+          this.logger.info(
+            `queryCopilot: provider ${name} discovered models: ${supportedModels
+              .slice(0, 30)
+              .join(', ')}${supportedModels.length > 30 ? ', …' : ''}`
+          );
+        }
+
+        if (!available) {
+          this.logger.error(
+            `queryCopilot: provider ${name} configured model "${configuredModel}" is NOT available — ` +
+              `marking unhealthy. Set query_copilot.providers.${name}.model to one of the discovered models.`
+          );
+          // The provider's isHealthy() now returns false instantly via the cached
+          // typed error, so checkProvider records an unhealthy state deterministically
+          // without an extra network round-trip.
+          await this.healthMonitor.checkProvider(name);
+        }
+      } catch (err) {
+        this.logger.warn(
+          `queryCopilot: model validation for ${name} could not complete: ${err}`
+        );
+      }
+    }
+  }
 
   /**
    * Instantiates a provider for every enabled entry in config.

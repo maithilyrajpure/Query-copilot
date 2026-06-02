@@ -8,7 +8,12 @@ import {
 } from '@google/generative-ai';
 import type { GenerativeModel } from '@google/generative-ai';
 import { BaseProvider } from '../base.provider';
-import type { ProviderPrompt, ProviderResponse, ProviderMetadata } from '../types';
+import type {
+  ProviderPrompt,
+  ProviderResponse,
+  ProviderMetadata,
+  ProviderModelValidationResult,
+} from '../types';
 import {
   ProviderRateLimitError,
   ProviderAuthError,
@@ -23,6 +28,8 @@ import {
   GEMINI_MAX_RETRIES,
   GEMINI_RETRY_BASE_DELAY_MS,
   GEMINI_HEALTH_PROBE_TEXT,
+  GEMINI_API_BASE_URL,
+  GEMINI_MODEL_VALIDATION_TIMEOUT_MS,
 } from './gemini.config';
 
 /**
@@ -52,6 +59,14 @@ export class GeminiProvider extends BaseProvider {
   private readonly model: GenerativeModel;
   private readonly adapter: GeminiAdapter;
   private readonly config: GeminiConfig;
+
+  /**
+   * Cached typed error set by validateModelAvailability() when startup discovery
+   * AFFIRMATIVELY reports the configured model is unavailable for generateContent.
+   * When non-null it short-circuits complete() and isHealthy() so we never repeat
+   * the runtime 404 on every request. null = no known problem (default).
+   */
+  private modelUnavailableError: ProviderUnavailableError | null = null;
 
   constructor(config: GeminiConfig) {
     super();
@@ -88,6 +103,12 @@ export class GeminiProvider extends BaseProvider {
    * scoped to this call rather than mutating the shared this.model.
    */
   public async complete(prompt: ProviderPrompt): Promise<ProviderResponse> {
+    // Short-circuit: if startup discovery affirmatively determined the configured
+    // model is not available for generateContent, throw the cached typed error
+    // BEFORE any network call so we never repeatedly hit the upstream 404.
+    if (this.modelUnavailableError !== null) {
+      throw this.modelUnavailableError;
+    }
     return this.retry(
       () => this.executeComplete(prompt),
       GEMINI_MAX_RETRIES,
@@ -101,6 +122,11 @@ export class GeminiProvider extends BaseProvider {
    * for a completion. Returns false on any error rather than throwing.
    */
   public async isHealthy(): Promise<boolean> {
+    // If startup discovery flagged the configured model as unavailable, report
+    // unhealthy immediately without a network probe.
+    if (this.modelUnavailableError !== null) {
+      return false;
+    }
     try {
       await this.withTimeout(
         () => this.model.countTokens(GEMINI_HEALTH_PROBE_TEXT),
@@ -122,6 +148,53 @@ export class GeminiProvider extends BaseProvider {
       priority: 1,
       maxTokens: this.config.maxTokens,
     };
+  }
+
+  /**
+   * Startup model-availability check.
+   *
+   * The legacy @google/generative-ai SDK does not expose listModels() on the
+   * GoogleGenerativeAI client, so we discover models directly via the v1beta
+   * REST endpoint (GET /models?key=...). We keep only models whose
+   * supportedGenerationMethods include 'generateContent', strip the "models/"
+   * prefix, and check whether the configured model is among them.
+   *
+   * Conservative failure handling: a network error, non-2xx (including 401/403
+   * or transient 5xx), or an unparseable body must NOT mark the model
+   * unavailable — discovery is purely advisory and a flaky probe should never
+   * block an otherwise-valid model. In those cases we leave modelUnavailableError
+   * untouched (null) and return { available: true, supportedModels: [] } so the
+   * caller can log "discovery unavailable, proceeding". Only an AFFIRMATIVE
+   * "model not in the returned list" sets the cached typed error. A genuinely
+   * bad key surfaces as ProviderAuthError on the first real request instead.
+   */
+  public async validateModelAvailability(): Promise<ProviderModelValidationResult> {
+    const configuredModel = this.stripModelPrefix(this.config.model);
+
+    let supportedModels: string[];
+    try {
+      supportedModels = await this.discoverGenerateContentModels();
+    } catch {
+      // Discovery failed (network/timeout/non-2xx/parse). Treat as advisory —
+      // do not mark unavailable; let a real request surface any true error.
+      return { configuredModel, available: true, supportedModels: [] };
+    }
+
+    const available = supportedModels.includes(configuredModel);
+
+    if (!available) {
+      const preview = supportedModels.slice(0, 15).join(', ');
+      this.modelUnavailableError = new ProviderUnavailableError(
+        PROVIDER_NAMES.GEMINI,
+        `Configured Gemini model "${this.config.model}" is not available for generateContent on this API key. ` +
+          `Available models: ${preview}${supportedModels.length > 15 ? ', …' : ''}`,
+        { retryable: false }
+      );
+    } else {
+      this.modelUnavailableError = null;
+    }
+
+    return { configuredModel, available, supportedModels };
   }
 
   /**
@@ -158,6 +231,71 @@ export class GeminiProvider extends BaseProvider {
   // ---------------------------------------------------------------------------
   // Private implementation
   // ---------------------------------------------------------------------------
+
+  /**
+   * Discovers models that support generateContent via the v1beta REST listModels
+   * endpoint. Returns model ids with the leading "models/" prefix stripped.
+   * Throws on any failure (network, timeout, non-2xx, parse) — the caller treats
+   * a throw as "discovery unavailable" rather than "model unavailable".
+   */
+  private async discoverGenerateContentModels(): Promise<string[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEMINI_MODEL_VALIDATION_TIMEOUT_MS);
+
+    try {
+      const url = `${GEMINI_API_BASE_URL}/models?key=${this.config.apiKey}`;
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`listModels returned HTTP ${res.status}`);
+      }
+
+      const body: unknown = await res.json();
+      return this.parseSupportedModels(body);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Narrows the unknown REST body to the model list and extracts the ids of
+   * models supporting generateContent (prefix-stripped). No `any`.
+   */
+  private parseSupportedModels(body: unknown): string[] {
+    if (body === null || typeof body !== 'object' || !('models' in body)) {
+      return [];
+    }
+
+    const models = (body as { models?: unknown }).models;
+    if (!Array.isArray(models)) {
+      return [];
+    }
+
+    const result: string[] = [];
+    for (const entry of models) {
+      if (entry === null || typeof entry !== 'object') continue;
+      const name = (entry as { name?: unknown }).name;
+      const methods = (entry as { supportedGenerationMethods?: unknown })
+        .supportedGenerationMethods;
+      if (
+        typeof name === 'string' &&
+        Array.isArray(methods) &&
+        methods.includes('generateContent')
+      ) {
+        result.push(this.stripModelPrefix(name));
+      }
+    }
+    return result;
+  }
+
+  /** Strips a leading "models/" prefix so ids compare consistently. */
+  private stripModelPrefix(model: string): string {
+    return model.startsWith('models/') ? model.slice('models/'.length) : model;
+  }
 
   /**
    * Core generation logic — called by complete() inside the retry wrapper.

@@ -59,6 +59,24 @@ const PRICING_TABLE: ReadonlyArray<{
   // ── Gemini ───────────────────────────────────────────────────────────────
   {
     provider: PROVIDER_NAMES.GEMINI,
+    model: 'gemini-2.0-flash',
+    pricing: {
+      inputPricePerMToken: 0.1,
+      outputPricePerMToken: 0.4,
+      label: 'Gemini 2.0 Flash',
+    },
+  },
+  {
+    provider: PROVIDER_NAMES.GEMINI,
+    model: 'gemini-2.5-flash',
+    pricing: {
+      inputPricePerMToken: 0.3,
+      outputPricePerMToken: 2.5,
+      label: 'Gemini 2.5 Flash',
+    },
+  },
+  {
+    provider: PROVIDER_NAMES.GEMINI,
     model: 'gemini-1.5-pro',
     pricing: {
       inputPricePerMToken: 1.25,

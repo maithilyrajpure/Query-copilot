@@ -11,7 +11,7 @@ import { PROVIDER_DEFAULT_MODELS, PROVIDER_MAX_TOKENS } from '../../../../common
 export interface GeminiConfig {
   /** Google AI Studio / Vertex AI API key. Never logged. */
   readonly apiKey: string;
-  /** Gemini model identifier, e.g. "gemini-1.5-pro" */
+  /** Gemini model identifier, e.g. "gemini-2.0-flash" */
   readonly model: string;
   /** Maximum completion tokens for generation requests. */
   readonly maxTokens: number;
@@ -71,3 +71,13 @@ export const GEMINI_RETRY_BASE_DELAY_MS = 500;
 
 /** Minimal prompt used by isHealthy() to verify connectivity without spending tokens. */
 export const GEMINI_HEALTH_PROBE_TEXT = 'ping';
+
+/**
+ * Base URL for the v1beta REST API. The legacy @google/generative-ai SDK targets
+ * this endpoint internally; we use it directly for model discovery (listModels),
+ * which the legacy SDK does not expose on GoogleGenerativeAI.
+ */
+export const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+
+/** Timeout for the startup model-discovery REST call. */
+export const GEMINI_MODEL_VALIDATION_TIMEOUT_MS = 10_000;

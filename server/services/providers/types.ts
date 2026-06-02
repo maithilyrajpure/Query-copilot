@@ -50,6 +50,28 @@ export interface ProviderResponse {
 
 export type ProviderRole = 'primary' | 'fallback' | 'local';
 
+// ---------------------------------------------------------------------------
+// ProviderModelValidationResult
+//
+// Result of an optional startup model-availability check. Providers that can
+// enumerate the models their API key actually exposes (e.g. Gemini via the
+// v1beta listModels REST endpoint) implement validateModelAvailability() and
+// return this shape so the plugin can log/validate the configured model.
+// ---------------------------------------------------------------------------
+
+export interface ProviderModelValidationResult {
+  /** The configured model identifier, normalised (no "models/" prefix). */
+  readonly configuredModel: string;
+  /**
+   * Whether the configured model is confirmed available for generateContent.
+   * Defaults to true (conservative) when discovery could not complete, so a
+   * flaky discovery call never blocks an otherwise-valid model.
+   */
+  readonly available: boolean;
+  /** Models discovered as supporting generateContent (empty if discovery failed). */
+  readonly supportedModels: readonly string[];
+}
+
 export interface ProviderMetadata {
   readonly name: ProviderName;
   /**
@@ -98,4 +120,14 @@ export interface ILLMProvider {
    * Implementations may use heuristics (e.g. chars / 4) or a proper tokeniser.
    */
   estimateTokens(text: string): number;
+
+  /**
+   * Optional startup check: discover the models the configured API key exposes
+   * and report whether the configured model is among them. Providers that
+   * cannot enumerate models simply omit this method. Implementations must be
+   * non-throwing for transient discovery failures (return available: true with
+   * an empty supportedModels list) and only report available: false on an
+   * affirmative "model not in the discovered list".
+   */
+  validateModelAvailability?(): Promise<ProviderModelValidationResult>;
 }

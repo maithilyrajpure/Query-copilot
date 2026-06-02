@@ -6,6 +6,7 @@ import { TopStatusBar } from '../components/layout/TopStatusBar';
 import { SplitLayout } from '../components/layout/SplitLayout';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { KQLEditorPanel } from '../components/editor/KQLEditorPanel';
+import { QueryOutputPanel } from '../components/results/QueryOutputPanel';
 
 /**
  * Application shell. Composes the top status bar above a two-panel split
@@ -26,7 +27,24 @@ export const AppShell: React.FC = () => {
         <TopStatusBar />
       </EuiFlexItem>
       <EuiFlexItem grow css={css({ minHeight: 0 })}>
-        <SplitLayout left={<ChatPanel />} right={<KQLEditorPanel />} />
+        <SplitLayout
+          left={<ChatPanel />}
+          right={
+            <EuiFlexGroup
+              direction="column"
+              gutterSize="m"
+              responsive={false}
+              css={css({ overflowY: 'auto' })}
+            >
+              <EuiFlexItem grow={false}>
+                <KQLEditorPanel />
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <QueryOutputPanel />
+              </EuiFlexItem>
+            </EuiFlexGroup>
+          }
+        />
       </EuiFlexItem>
     </EuiFlexGroup>
   );

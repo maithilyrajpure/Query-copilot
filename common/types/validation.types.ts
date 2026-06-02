@@ -19,6 +19,12 @@ export interface ValidationResult {
   readonly warnings: readonly ValidationError[];
   readonly validatedAt: string; // ISO 8601
   readonly validationDurationMs: number;
+  /**
+   * Human-readable ECS field coverage summary (e.g. "8 / 8"), when the validator
+   * resolved query fields against the ECS schema. Optional: not all validation
+   * runs populate it (the server may leave it undefined), so consumers must guard.
+   */
+  readonly ecsFieldCoverage?: string;
 }
 
 export interface CorrectionAttempt {

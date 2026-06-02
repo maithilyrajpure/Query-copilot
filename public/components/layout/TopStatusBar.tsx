@@ -6,23 +6,26 @@ import {
   EuiTitle,
   EuiText,
   EuiIcon,
-  EuiBadge,
   EuiAvatar,
   useEuiTheme,
 } from '@elastic/eui';
 import { css } from '@emotion/react';
 
-interface TopStatusBarProps {
-  statusBadge?: React.ReactNode;
-}
+import { SyntaxBadge } from '../statusbar/SyntaxBadge';
+import { ECSFieldsBadge } from '../statusbar/ECSFieldsBadge';
+import { TokensBadge } from '../statusbar/TokensBadge';
+import { ProviderBadge } from '../statusbar/ProviderBadge';
+import { FallbackBadge } from '../statusbar/FallbackBadge';
+import { CostBadge } from '../statusbar/CostBadge';
 
 /**
  * Horizontal status bar rendered above the split layout. Shows a blue rounded
- * logo square + the application title/subtitle on the left, and a status badge
- * plus the analyst avatar on the right. The real status badge is wired in a
- * later task; the success badge below is the default placeholder.
+ * logo square + the application title/subtitle on the left, and the live status
+ * badges (each wired to copilot state) plus the analyst avatar on the right.
+ * Most badges render nothing until the first query produces data; FallbackBadge
+ * always renders the green/orange system-status indicator.
  */
-export const TopStatusBar: React.FC<TopStatusBarProps> = ({ statusBadge }) => {
+export const TopStatusBar: React.FC = () => {
   const { euiTheme } = useEuiTheme();
 
   const logoCss = css({
@@ -74,9 +77,24 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({ statusBadge }) => {
         </EuiFlexItem>
 
         <EuiFlexItem grow={false}>
-          <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
+          <EuiFlexGroup alignItems="center" gutterSize="s" wrap responsive={false}>
             <EuiFlexItem grow={false}>
-              {statusBadge ?? <EuiBadge color="success">All Systems Operational</EuiBadge>}
+              <SyntaxBadge />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <ECSFieldsBadge />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <TokensBadge />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <ProviderBadge />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <FallbackBadge />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <CostBadge />
             </EuiFlexItem>
             <EuiFlexItem grow={false}>
               <EuiAvatar name="Analyst User" initials="AU" size="m" color={euiTheme.colors.primary} />

@@ -1,23 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import type { AppMountParameters, CoreStart } from '@kbn/core/public';
-import type { AppPluginStartDependencies } from './types';
-import { QueryCopilotApp } from './components/app';
+import type { CoreStart } from '@kbn/core/public';
+import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
 
-export const renderApp = (
-  { notifications, http }: CoreStart,
-  { navigation }: AppPluginStartDependencies,
-  { appBasePath, element }: AppMountParameters
-) => {
+import { App } from './app/App';
+
+/**
+ * Renders the Query Copilot React application into the given DOM element and
+ * returns an unmount function for Kibana to call on navigation away.
+ *
+ * Uses React 17's ReactDOM.render (the runtime here is React 17; createRoot /
+ * react-dom/client are not available).
+ */
+export function renderApp(coreStart: CoreStart, element: HTMLElement): () => void {
   ReactDOM.render(
-    <QueryCopilotApp
-      basename={appBasePath}
-      notifications={notifications}
-      http={http}
-      navigation={navigation}
-    />,
+    <KibanaContextProvider services={coreStart}>
+      <App coreStart={coreStart} />
+    </KibanaContextProvider>,
     element
   );
 
-  return () => ReactDOM.unmountComponentAtNode(element);
-};
+  return () => {
+    ReactDOM.unmountComponentAtNode(element);
+  };
+}

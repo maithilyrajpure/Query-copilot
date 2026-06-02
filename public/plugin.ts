@@ -1,48 +1,23 @@
-import { i18n } from '@kbn/i18n';
-import type { AppMountParameters, CoreSetup, CoreStart, Plugin } from '@kbn/core/public';
-import type {
-  QueryCopilotPluginSetup,
-  QueryCopilotPluginStart,
-  AppPluginStartDependencies,
-} from './types';
-import { PLUGIN_NAME } from '../common';
+import type { AppMountParameters, CoreSetup, Plugin } from '@kbn/core/public';
 
-export class QueryCopilotPlugin
-  implements Plugin<QueryCopilotPluginSetup, QueryCopilotPluginStart>
-{
-  public setup(core: CoreSetup): QueryCopilotPluginSetup {
-    
-    // Register an application into the side navigation menu
+/**
+ * Public (browser) plugin for Query Copilot. Registers the app and mounts the
+ * React application lazily on navigation.
+ */
+export class QueryCopilotPlugin implements Plugin<void, void> {
+  public setup(core: CoreSetup): void {
     core.application.register({
-      id: 'queryCopilot',
-      title: PLUGIN_NAME,
+      id: 'query_copilot',
+      title: 'Query Copilot',
       async mount(params: AppMountParameters) {
-        // Load application bundle
+        const [coreStart] = await core.getStartServices();
         const { renderApp } = await import('./application');
-        // Get start services as specified in kibana.json
-        const [coreStart, depsStart] = await core.getStartServices();
-        // Render the application
-        return renderApp(coreStart, depsStart as AppPluginStartDependencies, params);
+        return renderApp(coreStart, params.element);
       },
-      
     });
-
-    // Return methods that should be available to other plugins
-    return {
-      getGreeting() {
-        return i18n.translate('queryCopilot.greetingText', {
-          defaultMessage: 'Hello from {name}!',
-          values: {
-            name: PLUGIN_NAME,
-          },
-        });
-      },
-    };
   }
 
-  public start(core: CoreStart): QueryCopilotPluginStart {
-    return {};
-  }
+  public start(): void {}
 
-  public stop() {}
+  public stop(): void {}
 }

@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
-import {
-  EuiFlexGroup,
-  EuiFlexItem,
-  EuiFieldText,
-  EuiButtonIcon,
-  EuiLoadingSpinner,
-} from '@elastic/eui';
+import { EuiFieldText, EuiButtonIcon, EuiText, useEuiTheme, transparentize } from '@elastic/eui';
+import { css } from '@emotion/react';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
   isGenerating: boolean;
   disabled?: boolean;
 }
+
+/** Edge length of the composer controls (text field + send button). */
+const CONTROL_SIZE = 40;
 
 /**
  * Single-line chat input with a solid primary send button.
@@ -20,8 +18,18 @@ interface ChatInputProps {
  * multiline EuiTextArea). Enter sends the message; Shift+Enter is a no-op here
  * (a true newline would require EuiTextArea, intentionally not used to match
  * the single-line mockup).
+ *
+ * The field and send button live inside one cohesive "composer" bar: a rounded,
+ * token-bordered container on the empty-shade background that shows the primary
+ * focus ring via `&:focus-within`. The EuiFieldText is rendered visually
+ * borderless/transparent so the composer border is the only visible frame, and
+ * the send button is a solid primary square matching the control height. While
+ * generating the button stays in place (via EuiButtonIcon's `isLoading`, which
+ * swaps the icon for a centered spinner but keeps the same square footprint) so
+ * the bar height never shifts.
  */
 export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isGenerating, disabled }) => {
+  const { euiTheme } = useEuiTheme();
   const [value, setValue] = useState('');
 
   const handleSend = () => {
@@ -42,16 +50,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isGenerating, disa
     }
   };
 
+  const composerCss = css({
+    display: 'flex',
+    alignItems: 'center',
+    gap: euiTheme.size.xs,
+    padding: euiTheme.size.xs,
+    backgroundColor: euiTheme.colors.emptyShade,
+    border: `${euiTheme.border.width.thin} solid ${euiTheme.border.color}`,
+    borderRadius: euiTheme.border.radius.medium,
+    transition: `border-color ${euiTheme.animation.fast}, box-shadow ${euiTheme.animation.fast}`,
+    '&:focus-within': {
+      borderColor: euiTheme.colors.primary,
+      boxShadow: `0 0 0 1px ${transparentize(euiTheme.colors.primary, 0.3)}`,
+    },
+  });
+
+  // Make the field blend into the composer: strip its own frame (border, box
+  // shadow, background) so the composer container is the only visible border.
+  // EUI applies the field background/shadow via a CSS var + `box-shadow`, so we
+  // override both here (no `!important` needed — this selector wins on
+  // specificity for the rendered element).
+  const fieldCss = css({
+    backgroundColor: 'transparent',
+    boxShadow: 'none',
+    height: CONTROL_SIZE,
+    // Grow to fill the bar and allow shrinking below content width so the
+    // square send button is never squeezed.
+    flex: 1,
+    minWidth: 0,
+  });
+
+  const sendButtonCss = css({
+    // Lock to a true square: `flexShrink: 0` stops flexbox from shaving width
+    // off the button on narrower panels (which would make it non-square).
+    flexShrink: 0,
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: euiTheme.border.radius.medium,
+  });
+
+  const isSendDisabled = isGenerating || Boolean(disabled) || !value.trim();
+
   return (
-    <EuiFlexGroup
-      gutterSize="s"
-      alignItems="center"
-      responsive={false}
-      data-test-subj="queryCopilotChatInput"
-    >
-      <EuiFlexItem>
+    <>
+      <div css={composerCss} data-test-subj="queryCopilotChatInput">
         <EuiFieldText
           fullWidth
+          controlOnly
+          css={fieldCss}
           placeholder="Ask anything about your logs..."
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -59,22 +105,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isGenerating, disa
           disabled={isGenerating || disabled}
           aria-label="Ask anything about your logs"
         />
-      </EuiFlexItem>
-      <EuiFlexItem grow={false}>
-        {isGenerating ? (
-          <EuiLoadingSpinner size="m" />
-        ) : (
-          <EuiButtonIcon
-            display="fill"
-            color="primary"
-            iconType="play"
-            aria-label="Send message"
-            onClick={handleSend}
-            isDisabled={isGenerating || disabled || !value.trim()}
-            data-test-subj="queryCopilotChatInputSendButton"
-          />
-        )}
-      </EuiFlexItem>
-    </EuiFlexGroup>
+        <EuiButtonIcon
+          display="fill"
+          color="primary"
+          iconType="play"
+          aria-label="Send message"
+          onClick={handleSend}
+          isDisabled={isSendDisabled}
+          isLoading={isGenerating}
+          css={sendButtonCss}
+          data-test-subj="queryCopilotChatInputSendButton"
+        />
+      </div>
+      <EuiText size="xs" color="subdued" css={css({ marginTop: euiTheme.size.xs })}>
+        Press Enter to send
+      </EuiText>
+    </>
   );
 };

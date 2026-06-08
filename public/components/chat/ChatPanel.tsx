@@ -6,7 +6,7 @@ import {
   EuiTitle,
   EuiIcon,
   EuiHorizontalRule,
-  EuiSpacer,
+  useEuiTheme,
 } from '@elastic/eui';
 import { css } from '@emotion/react';
 
@@ -22,6 +22,7 @@ import { ChatInput } from './ChatInput';
  */
 export const ChatPanel: React.FC = () => {
   const { state, sendQuery } = useCopilot();
+  const { euiTheme } = useEuiTheme();
 
   return (
     <EuiPanel
@@ -46,14 +47,20 @@ export const ChatPanel: React.FC = () => {
 
       <MessageThread messages={state.conversation} isGenerating={state.isGenerating} />
 
-      <EuiSpacer size="s" />
-
-      <ChatInput
-        onSend={(text) => {
-          void sendQuery(text);
-        }}
-        isGenerating={state.isGenerating}
-      />
+      <div
+        css={css({
+          borderTop: `${euiTheme.border.width.thin} solid ${euiTheme.border.color}`,
+          paddingTop: euiTheme.size.m,
+          marginTop: euiTheme.size.s,
+        })}
+      >
+        <ChatInput
+          onSend={(text) => {
+            void sendQuery(text);
+          }}
+          isGenerating={state.isGenerating}
+        />
+      </div>
     </EuiPanel>
   );
 };

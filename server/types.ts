@@ -6,6 +6,7 @@ import type { ConfigService } from './services/config/config.service';
 import type { ProviderRouter } from './services/providers/router/provider.router';
 import type { QueryPipeline } from './services/query/query.pipeline';
 import type { CacheService } from './services/cache/cache.service';
+import type { QuerySearchProvider } from './services/execution';
 
 // ---------------------------------------------------------------------------
 // Plugin dependency contracts
@@ -45,4 +46,13 @@ export interface QueryCopilotContext {
    * permissions; all other collaborators are shared singletons.
    */
   readonly createPipeline: (esClient: ElasticsearchClient) => QueryPipeline;
+  /**
+   * MCP-backed query-execution provider, present only when
+   * `queryCopilot.mcp.searchEnabled` is `true`. When present it REPLACES the
+   * per-request `asCurrentUser` {@link QueryExecutorService} on the execute
+   * route. RBAC note: the MCP path runs as the MCP container's Elasticsearch
+   * identity, NOT the requesting user's, so results reflect the container's
+   * privileges rather than the caller's.
+   */
+  readonly mcpSearchProvider?: QuerySearchProvider;
 }

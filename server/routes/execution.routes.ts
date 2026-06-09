@@ -45,16 +45,25 @@ export function registerExecutionRoutes(router: IRouter, context: QueryCopilotCo
       context.logger.logRequest(requestId, 'POST', request.url.pathname);
 
       try {
-        const coreCtx = await ctx.core;
-        const esClient = coreCtx.elasticsearch.client.asCurrentUser;
-        const executor = new QueryExecutorService(esClient, context.logger);
-
         const body: ExecuteRequestBody = request.body;
-        const result = await executor.execute({
+        const params = {
           kql: body.kql,
           indexPattern: body.indexPattern,
           timeRange: body.timeRange,
-        });
+        };
+
+        let result;
+        if (context.mcpSearchProvider) {
+          // MCP SEARCH path (queryCopilot.mcp.searchEnabled). RBAC: runs as the MCP
+          // container's ES identity (Aryan), NOT asCurrentUser. If the MCP server is
+          // unreachable the typed McpConnectionError/McpTimeoutError propagates to the
+          // catch below (mapped to 500) — we do NOT fall back to asCurrentUser.
+          result = await context.mcpSearchProvider.execute(params);
+        } else {
+          const coreCtx = await ctx.core;
+          const esClient = coreCtx.elasticsearch.client.asCurrentUser;
+          result = await new QueryExecutorService(esClient, context.logger).execute(params);
+        }
 
         return response.ok({ headers, body: result });
       } catch (error) {

@@ -8,14 +8,25 @@
 
 import { randomUUID } from 'node:crypto';
 import type { ElasticsearchClient } from '@kbn/core/server';
-import { buildEsQuery } from '@kbn/es-query';
-import type { estypes } from '@elastic/elasticsearch';
 import type { QueryExecutionParams, QueryExecutionResult } from '../../../common/types';
 import type { LoggerService } from '../observability/logger.service';
 import { ResultNormalizer } from './result.normalizer';
+import { buildQueryDsl, DEFAULT_MAX_RESULTS, TIMESTAMP_SORT } from './search.query.builder';
+
+/**
+ * Common contract for a query-execution backend: given
+ * {@link QueryExecutionParams}, produce a normalized {@link QueryExecutionResult}.
+ *
+ * Implemented by both {@link QueryExecutorService} (the `asCurrentUser` ES path)
+ * and the MCP-backed search provider, so the execute route can branch between
+ * them behind a feature flag without knowing which is in play.
+ */
+export interface QuerySearchProvider {
+  execute(params: QueryExecutionParams): Promise<QueryExecutionResult>;
+}
 
 /** Runs KQL queries against Elasticsearch and returns normalized results. */
-export class QueryExecutorService {
+export class QueryExecutorService implements QuerySearchProvider {
   private readonly normalizer: ResultNormalizer;
 
   constructor(
@@ -33,41 +44,20 @@ export class QueryExecutorService {
    *   `buildEsQuery`) so the route can map it to an HTTP status.
    */
   async execute(params: QueryExecutionParams): Promise<QueryExecutionResult> {
-    const maxResults = params.maxResults ?? 100;
+    const maxResults = params.maxResults ?? DEFAULT_MAX_RESULTS;
     const execId = randomUUID();
 
-    // Build the KQL DSL. `buildEsQuery` throws `KQLSyntaxError` on invalid KQL.
-    const kqlDsl = buildEsQuery(undefined, { query: params.kql, language: 'kuery' }, []);
-
-    // Combine with an optional time range filter.
-    const finalQuery: estypes.QueryDslQueryContainer = params.timeRange
-      ? {
-          bool: {
-            must: [kqlDsl],
-            filter: [
-              {
-                range: {
-                  '@timestamp': {
-                    gte: params.timeRange.from,
-                    lte: params.timeRange.to,
-                    format: 'strict_date_optional_time||epoch_millis',
-                  },
-                },
-              },
-            ],
-          },
-        }
-      : kqlDsl;
+    // Build the KQL DSL (incl. optional time-range wrap). `buildQueryDsl` throws
+    // `KQLSyntaxError` on invalid KQL. Shared with the MCP search path so both
+    // build the identical query.
+    const finalQuery = buildQueryDsl(params.kql, params.timeRange);
 
     try {
       const response = await this.esClient.search<Record<string, unknown>>(
         {
           index: params.indexPattern,
           query: finalQuery,
-          // Sort newest-first so a capped `size` returns the most recent docs.
-          // `unmapped_type: 'date'` keeps the sort valid across indices in the
-          // pattern that lack an `@timestamp` mapping instead of erroring.
-          sort: [{ '@timestamp': { order: 'desc', unmapped_type: 'date' } }],
+          sort: TIMESTAMP_SORT,
           size: maxResults,
           track_total_hits: true,
           timeout: '30s',

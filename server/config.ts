@@ -92,6 +92,12 @@ export const configSchema = schema.object({
     // instead of the per-request `asCurrentUser` ESMappingFetcher. Defaults to
     // `false` so the existing RBAC-honouring path remains the default.
     enabled: schema.boolean({ defaultValue: false }),
+    // Feature flag for the MCP SEARCH path (separate from the `enabled` mapping
+    // flag above). When `true`, query EXECUTION (POST /execute) is served by the
+    // MCP server's `search` tool instead of the per-request `asCurrentUser`
+    // QueryExecutorService. Defaults to `false` so the RBAC-honouring path stays
+    // the default. RBAC: the MCP path runs as the MCP container's ES identity.
+    searchEnabled: schema.boolean({ defaultValue: false }),
     serverUrl: schema.string({ defaultValue: 'http://localhost:8080/mcp' }),
     requestTimeoutMs: schema.number({
       defaultValue: 30000,

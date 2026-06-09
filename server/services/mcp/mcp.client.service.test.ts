@@ -190,17 +190,25 @@ describe('McpClientService', () => {
   });
 
   describe('search', () => {
-    it('calls callTool with search + { index, query_body } and normalises hits', async () => {
-      clientMock().callTool.mockResolvedValueOnce(
-        textResult({
-          took: 12,
-          timed_out: false,
-          hits: {
-            total: { value: 1 },
-            hits: [{ _index: 'logs-1', _id: '1', _source: { message: 'hello' } }],
+    it('calls callTool with search + { index, query_body } and parses the two-block response', async () => {
+      // VERIFIED live shape: block[0] is a human summary, block[1] is a JSON
+      // ARRAY of bare `_source` documents (no hits envelope, no _index/_id/_score).
+      clientMock().callTool.mockResolvedValueOnce({
+        content: [
+          { type: 'text', text: 'Total results: 9, showing 1.' },
+          {
+            type: 'text',
+            text: JSON.stringify([
+              {
+                '@timestamp': '2026-02-02T06:42:50Z',
+                event: { action: 'login' },
+                source: { ip: '10.0.0.1' },
+              },
+            ]),
           },
-        })
-      );
+        ],
+        isError: false,
+      });
 
       const result = await service.search('logs-*', { match_all: {} });
 
@@ -209,11 +217,20 @@ describe('McpClientService', () => {
         arguments: { index: 'logs-*', query_body: { match_all: {} } },
       });
 
-      expect(result.total).toBe(1);
-      expect(result.tookMs).toBe(12);
+      // total is parsed from the summary block; took/timedOut are absent on the
+      // MCP search response.
+      expect(result.total).toBe(9);
+      expect(result.tookMs).toBe(0);
       expect(result.timedOut).toBe(false);
-      expect(result.columns.map((c) => c.id)).toContain('message');
-      expect(result.rows).toEqual([{ message: 'hello' }]);
+
+      // Each bare _source doc is flattened into dotted-path columns/rows.
+      const columnIds = result.columns.map((c) => c.id);
+      expect(columnIds).toContain('event.action');
+      expect(columnIds).toContain('source.ip');
+      expect(result.rows[0]).toMatchObject({
+        'event.action': 'login',
+        'source.ip': '10.0.0.1',
+      });
     });
   });
 

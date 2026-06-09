@@ -180,18 +180,28 @@ export class McpClientService {
   }
 
   /**
-   * Invoke a single MCP tool and return the parsed JSON payload from its first
-   * `text` content block.
+   * Invoke a single MCP tool and return its RAW result (the `content` block
+   * array plus `isError`), WITHOUT JSON-parsing any block.
    *
-   * The Elastic Elasticsearch MCP server returns tool output as JSON encoded in
-   * a text content block, so we parse `content[0].text` as JSON.
+   * Centralises the SDK call and all error mapping:
+   *  - timeout → {@link McpTimeoutError}
+   *  - connection/unreachable → {@link McpConnectionError}
+   *  - JSON-RPC / any other rejection → {@link McpToolError}
+   *  - `isError === true` in the result → {@link McpToolError}
    *
-   * @throws {McpToolError} when the result has `isError: true`, or when no
-   *   parseable text content block is present.
+   * Callers are responsible for interpreting the content blocks (single-block
+   * JSON for {@link McpClientService.listIndices}/{@link McpClientService.getMappings},
+   * the two-block summary + `_source[]` shape for {@link McpClientService.search}).
+   *
+   * @throws {McpToolError} when the result has `isError: true`, or on a
+   *   tool-level / JSON-RPC protocol failure.
    * @throws {McpTimeoutError} / {@link McpConnectionError} when the underlying
    *   SDK call fails for those reasons.
    */
-  private async callTool(name: ToolName, args: Record<string, unknown>): Promise<unknown> {
+  private async invokeTool(
+    name: ToolName,
+    args: Record<string, unknown>
+  ): Promise<McpCallToolResult> {
     const client = await this.ensureConnected();
 
     let result: McpCallToolResult;
@@ -227,6 +237,25 @@ export class McpClientService {
     if (result.isError === true) {
       throw new McpToolError(name, this.extractText(result) ?? 'tool reported an error');
     }
+
+    return result;
+  }
+
+  /**
+   * Invoke a tool and return the parsed JSON payload from its first `text`
+   * content block.
+   *
+   * Used by the single-block tools ({@link ToolName.ListIndices},
+   * {@link ToolName.GetMappings}), whose payload is a single JSON-encoded text
+   * block. {@link McpClientService.search} does NOT use this — it parses the
+   * server's two-block (summary + `_source[]`) response directly.
+   *
+   * @throws {McpToolError} when no parseable text content block is present, or
+   *   when the block is not valid JSON.
+   * @throws {McpTimeoutError} / {@link McpConnectionError} via {@link invokeTool}.
+   */
+  private async callTool(name: ToolName, args: Record<string, unknown>): Promise<unknown> {
+    const result = await this.invokeTool(name, args);
 
     const text = this.extractText(result);
     if (text === undefined) {
@@ -324,7 +353,7 @@ export class McpClientService {
 
   /**
    * Execute a Query DSL search against an index pattern via the `search` tool
-   * and normalise the hits into a tabular {@link QueryExecutionResult}.
+   * and normalise the documents into a tabular {@link QueryExecutionResult}.
    *
    * @param indexPattern - The index pattern to search.
    * @param queryDsl - A raw Elasticsearch Query DSL query body.
@@ -335,33 +364,65 @@ export class McpClientService {
    * `query_body`, which carries the full ES Query DSL body — `query`, `size`,
    * `from`, `sort`, etc.). The server also accepts an optional `fields: string[]`
    * to restrict the returned source fields; we intentionally do not send it.
-   * Mapping of the response is best-effort and tolerant of missing fields.
+   *
+   * **Response shape (VERIFIED against the live server).** Unlike a raw ES
+   * `_search`, the MCP `search` tool returns TWO `text` content blocks rather
+   * than a single `{ took, hits }` envelope:
+   *  - block[0]: a human-readable summary string, e.g. `"Total results: 9,
+   *    showing 1."`. We regex the integer out of it for `total`.
+   *  - block[1]: a JSON ARRAY of bare `_source` documents — NO `hits` envelope,
+   *    and NO `_index`/`_id`/`_score` per document. Each element is wrapped as
+   *    `{ _source: doc }` so {@link ResultNormalizer.normalizeHits} consumes it
+   *    unchanged. A zero-results response may carry ONLY the summary block, in
+   *    which case the documents default to `[]` (not an error).
+   *
+   * The MCP `search` response carries neither `took` nor `timed_out`, so
+   * `tookMs` is reported as `0` and `timedOut` as `false`.
    */
   async search(
     indexPattern: string,
     queryDsl: Record<string, unknown>
   ): Promise<QueryExecutionResult> {
-    const parsed = await this.callTool(ToolName.Search, {
+    const result = await this.invokeTool(ToolName.Search, {
       index: indexPattern,
       query_body: queryDsl,
     });
 
-    const body = isRecord(parsed) ? parsed : {};
-    const hits = isRecord(body.hits) ? body.hits : {};
-
-    const total = this.normalizeTotal(hits.total);
-    const tookMs = typeof body.took === 'number' ? body.took : 0;
-    const timedOut = body.timed_out === true;
-
-    const rawHits = Array.isArray(hits.hits) ? hits.hits : [];
-    const normalizer = new ResultNormalizer();
-    // ResultNormalizer expects estypes.SearchHit objects; the MCP payload is
-    // structurally compatible (it forwards ES's hit objects verbatim).
-    const { columns, rows } = normalizer.normalizeHits(
-      rawHits as Parameters<ResultNormalizer['normalizeHits']>[0]
+    // Collect the text content blocks in order: [0] summary, [1] documents JSON.
+    const blocks = result.content.filter(
+      (c): c is McpTextContentBlock => c.type === 'text' && typeof c.text === 'string'
     );
 
-    return { columns, rows, total, tookMs, timedOut };
+    // total: pull the integer out of the summary block's "Total results: N" text.
+    const summaryMatch = blocks[0]?.text.match(/Total results:\s*(\d+)/i);
+    const total = summaryMatch ? Number.parseInt(summaryMatch[1], 10) : 0;
+
+    // docs: parse the second block when present; a summary-only (zero-results)
+    // response yields no documents block, in which case docs is `[]`.
+    let docs: unknown[] = [];
+    const docsText = blocks[1]?.text;
+    if (docsText !== undefined) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(docsText) as unknown;
+      } catch (error) {
+        throw new McpToolError(ToolName.Search, 'search result was not valid JSON', {
+          cause: error,
+        });
+      }
+      docs = Array.isArray(parsed) ? parsed : [];
+    }
+
+    // Wrap each bare `_source` doc as `{ _source: doc }` so the normalizer (which
+    // expects estypes.SearchHit objects) consumes the MCP payload unchanged.
+    const hits = docs.map((doc) => ({ _source: doc }));
+    const normalizer = new ResultNormalizer();
+    const { columns, rows } = normalizer.normalizeHits(
+      hits as Parameters<ResultNormalizer['normalizeHits']>[0]
+    );
+
+    // The MCP search response carries neither `took` nor `timed_out`.
+    return { columns, rows, total, tookMs: 0, timedOut: false };
   }
 
   /**
@@ -386,17 +447,6 @@ export class McpClientService {
   }
 
   // ── Private parsing helpers ────────────────────────────────────────────────
-
-  /** Normalise ES `hits.total` (a number, or `{ value: number }`) to a number. */
-  private normalizeTotal(total: unknown): number {
-    if (typeof total === 'number') {
-      return total;
-    }
-    if (isRecord(total) && typeof total.value === 'number') {
-      return total.value;
-    }
-    return 0;
-  }
 
   /**
    * Locate the ES `properties` object inside a defensively-parsed mapping

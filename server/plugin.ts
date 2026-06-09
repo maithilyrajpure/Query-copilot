@@ -47,7 +47,7 @@ import { PromptBuilder } from './services/prompt';
 import { KQLValidatorService } from './services/validation';
 import { CorrectionEngine, CorrectionPromptBuilder } from './services/correction';
 import { QueryPipeline } from './services/query';
-import { McpClientService, McpMappingProvider } from './services/mcp';
+import { McpClientService, McpMappingProvider, McpSearchProvider } from './services/mcp';
 import type { ElasticsearchClient } from '@kbn/core/server';
 import type Redis from 'ioredis';
 
@@ -157,6 +157,19 @@ export class QueryCopilotPlugin
       );
     }
 
+    // ── MCP search path (separately feature-flagged) ───────────────────────────
+    // When queryCopilot.mcp.searchEnabled is true, query EXECUTION is served by
+    // the MCP server's `search` tool instead of the per-request asCurrentUser
+    // QueryExecutorService. This is independent of the mapping flag above.
+    const mcpSearchEnabled = this.configService.getMcpConfig().searchEnabled;
+    const mcpSearchProvider = mcpSearchEnabled ? new McpSearchProvider(mcpClient) : undefined;
+    if (mcpSearchEnabled) {
+      this.logger.info(
+        'queryCopilot: MCP SEARCH path ENABLED — query execution via MCP server ' +
+          '(RBAC: MCP container identity, not asCurrentUser)'
+      );
+    }
+
     // A QueryPipeline is built per request, bound to the request-scoped ES client
     // (so index-mapping reads honour the requesting user's permissions). The other
     // collaborators above are stateless singletons created once here.
@@ -186,6 +199,7 @@ export class QueryCopilotPlugin
       router: providerRouter,
       cacheService,
       createPipeline,
+      mcpSearchProvider,
     };
 
     // ── Routes ────────────────────────────────────────────────────────────────
@@ -208,7 +222,8 @@ export class QueryCopilotPlugin
     // This is purely an optimisation: McpClientService lazily connects on first use
     // and surfaces typed McpConnectionError/McpTimeoutError at request time, so a
     // failure here MUST NOT block Kibana startup — log and continue.
-    if (this.configService.getMcpConfig().enabled && this.mcpClient) {
+    const mcpConfig = this.configService.getMcpConfig();
+    if ((mcpConfig.enabled || mcpConfig.searchEnabled) && this.mcpClient) {
       try {
         await this.mcpClient.connect();
         this.logger.info('queryCopilot: connected to MCP server');

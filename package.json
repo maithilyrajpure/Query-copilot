@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "^0.100.1",
     "@google/generative-ai": "^0.24.1",
     "@kbn/es-query": "link:../../src/platform/packages/shared/kbn-es-query",
+    "@modelcontextprotocol/sdk": "1.25.2",
     "groq-sdk": "^1.2.1",
     "ioredis": "^5.11.0",
     "js-tiktoken": "^1.0.21",

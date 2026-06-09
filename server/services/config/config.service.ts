@@ -10,6 +10,7 @@ import type {
   OpenAIProviderConfig,
   RedisConfig,
   PipelineConfig,
+  McpConfig,
 } from '../../config';
 
 // ---------------------------------------------------------------------------
@@ -116,6 +117,16 @@ export class ConfigService {
 
   public getMaxCorrectionRetries(): number {
     return this.config.pipeline.maxCorrectionRetries;
+  }
+
+  // ── MCP ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns the MCP client config (server URL + request timeout).
+   * No secrets are present, so this is safe to read freely.
+   */
+  public getMcpConfig(): Readonly<McpConfig> {
+    return this.config.mcp;
   }
 
   // ── Providers ─────────────────────────────────────────────────────────────

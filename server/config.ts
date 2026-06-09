@@ -79,6 +79,19 @@ export const configSchema = schema.object({
     }),
     cacheEnabled: schema.boolean({ defaultValue: true }),
   }),
+
+  // ── MCP (Elasticsearch MCP Server client) ────────────────────────────────
+  mcp: schema.object({
+    serverUrl: schema.string({ defaultValue: 'http://localhost:8080/mcp' }),
+    requestTimeoutMs: schema.number({
+      defaultValue: 30000,
+      validate(value) {
+        if (value < 1000 || value > 120000) {
+          return `mcp.requestTimeoutMs must be between 1000 and 120000 ms, got ${value}`;
+        }
+      },
+    }),
+  }),
 });
 
 export type QueryCopilotConfig = TypeOf<typeof configSchema>;
@@ -90,6 +103,7 @@ export type AnthropicProviderConfig = QueryCopilotConfig['providers']['anthropic
 export type OpenAIProviderConfig = QueryCopilotConfig['providers']['openai'];
 export type RedisConfig = QueryCopilotConfig['redis'];
 export type PipelineConfig = QueryCopilotConfig['pipeline'];
+export type McpConfig = QueryCopilotConfig['mcp'];
 
 /**
  * MUST match the snake_case conversion of the plugin id in kibana.json.

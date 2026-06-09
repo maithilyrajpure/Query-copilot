@@ -4,6 +4,7 @@ import type {
   QueryExecutionResponse,
   QueryGenerationResponse,
   SystemHealth,
+  TimeRange,
   ValidationResult,
 } from '../../common/types';
 import {
@@ -17,6 +18,7 @@ import {
   type SetGeneratingAction,
   type SetProviderStateAction,
   type SetQueryResultsAction,
+  type SetTimeRangeAction,
   type SetValidationResultAction,
   type UpdateKqlAction,
 } from './types';
@@ -73,4 +75,9 @@ export function setQueryResults(
   results: QueryExecutionResponse | null
 ): SetQueryResultsAction {
   return { type: COPILOT_ACTION_TYPES.SET_QUERY_RESULTS, results };
+}
+
+/** Replaces the time window applied to the next query execution. */
+export function setTimeRange(timeRange: TimeRange): SetTimeRangeAction {
+  return { type: COPILOT_ACTION_TYPES.SET_TIME_RANGE, timeRange };
 }

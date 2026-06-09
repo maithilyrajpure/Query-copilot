@@ -1,8 +1,16 @@
 import React from 'react';
-import { EuiButton, EuiButtonEmpty, EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
+import {
+  EuiButton,
+  EuiButtonEmpty,
+  EuiFlexGroup,
+  EuiFlexItem,
+  EuiSuperDatePicker,
+  type OnTimeChangeProps,
+} from '@elastic/eui';
 
 import { useCopilot } from '../../store/copilot.context';
 import { useQueryExecution } from '../../hooks/useQueryExecution';
+import { setTimeRange } from '../../store/copilot.actions';
 
 export interface EditorToolbarProps {
   isEditing: boolean;
@@ -10,8 +18,17 @@ export interface EditorToolbarProps {
 }
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({ isEditing, onToggleEdit }) => {
-  const { state } = useCopilot();
+  const { state, dispatch } = useCopilot();
   const { executeQuery, isExecuting } = useQueryExecution();
+
+  // Commit the selected window to state and, when there is a query to run,
+  // immediately re-execute it against the new range for an interactive feel.
+  const handleTimeChange = ({ start, end }: OnTimeChangeProps): void => {
+    dispatch(setTimeRange({ from: start, to: end }));
+    if (state.currentKQL.trim().length > 0) {
+      void executeQuery(state.currentKQL, state.indexPattern, { from: start, to: end });
+    }
+  };
 
   return (
     <EuiFlexGroup
@@ -20,6 +37,21 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ isEditing, onToggl
       justifyContent="flexEnd"
       responsive={false}
     >
+      <EuiFlexItem grow>
+        <EuiSuperDatePicker
+          compressed
+          width="auto"
+          showUpdateButton
+          start={state.timeRange.from}
+          end={state.timeRange.to}
+          onTimeChange={handleTimeChange}
+          onRefresh={({ start, end }) => {
+            dispatch(setTimeRange({ from: start, to: end }));
+            void executeQuery(state.currentKQL, state.indexPattern, { from: start, to: end });
+          }}
+          data-test-subj="queryCopilotTimePicker"
+        />
+      </EuiFlexItem>
       <EuiFlexItem grow={false}>
         <EuiButtonEmpty
           size="s"
@@ -40,7 +72,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ isEditing, onToggl
           isLoading={isExecuting}
           disabled={isExecuting || state.currentKQL.trim().length === 0}
           onClick={() => {
-            void executeQuery(state.currentKQL, state.indexPattern);
+            void executeQuery(state.currentKQL, state.indexPattern, state.timeRange);
           }}
           data-test-subj="queryCopilotEditorRunButton"
         >

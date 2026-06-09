@@ -2,6 +2,7 @@ import type {
   QueryGenerationRequest,
   QueryGenerationResponse,
   QueryExecutionResponse,
+  TimeRange,
 } from '../../common/types';
 import { PLUGIN_ROUTE_PREFIX } from '../../common';
 import { ApiClient } from './api.client';
@@ -12,7 +13,15 @@ export class QueryApiService extends ApiClient {
     return this.post<QueryGenerationResponse>(`${PLUGIN_ROUTE_PREFIX}/generate`, request);
   }
 
-  public async executeQuery(kql: string, indexPattern: string): Promise<QueryExecutionResponse> {
-    return this.post<QueryExecutionResponse>(`${PLUGIN_ROUTE_PREFIX}/execute`, { kql, indexPattern });
+  public async executeQuery(
+    kql: string,
+    indexPattern: string,
+    timeRange?: TimeRange
+  ): Promise<QueryExecutionResponse> {
+    return this.post<QueryExecutionResponse>(`${PLUGIN_ROUTE_PREFIX}/execute`, {
+      kql,
+      indexPattern,
+      ...(timeRange ? { timeRange } : {}),
+    });
   }
 }

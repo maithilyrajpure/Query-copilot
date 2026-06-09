@@ -5,6 +5,7 @@ import type {
   QueryExecutionResponse,
   QueryGenerationResponse,
   SystemHealth,
+  TimeRange,
   TokenEstimate,
   ValidationResult,
 } from '../../common/types';
@@ -43,6 +44,7 @@ export interface CopilotState {
   readonly error: CopilotError | null;
   readonly queryResults: QueryExecutionResponse | null;
   readonly indexPattern: string;
+  readonly timeRange: TimeRange;
 }
 
 /**
@@ -64,6 +66,7 @@ export const COPILOT_ACTION_TYPES = {
   RESET_SESSION: 'RESET_SESSION',
   SET_VALIDATION_RESULT: 'SET_VALIDATION_RESULT',
   SET_QUERY_RESULTS: 'SET_QUERY_RESULTS',
+  SET_TIME_RANGE: 'SET_TIME_RANGE',
 } as const;
 
 export type CopilotActionType =
@@ -120,6 +123,11 @@ export interface SetQueryResultsAction {
   readonly results: QueryExecutionResponse | null;
 }
 
+export interface SetTimeRangeAction {
+  readonly type: typeof COPILOT_ACTION_TYPES.SET_TIME_RANGE;
+  readonly timeRange: TimeRange;
+}
+
 /** Discriminated union of every copilot action. */
 export type CopilotAction =
   | SendQueryAction
@@ -131,4 +139,5 @@ export type CopilotAction =
   | AddMessageAction
   | ResetSessionAction
   | SetValidationResultAction
-  | SetQueryResultsAction;
+  | SetQueryResultsAction
+  | SetTimeRangeAction;

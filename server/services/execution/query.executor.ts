@@ -64,6 +64,10 @@ export class QueryExecutorService {
         {
           index: params.indexPattern,
           query: finalQuery,
+          // Sort newest-first so a capped `size` returns the most recent docs.
+          // `unmapped_type: 'date'` keeps the sort valid across indices in the
+          // pattern that lack an `@timestamp` mapping instead of erroring.
+          sort: [{ '@timestamp': { order: 'desc', unmapped_type: 'date' } }],
           size: maxResults,
           track_total_hits: true,
           timeout: '30s',

@@ -4,6 +4,7 @@ import { useCopilot } from '../store/copilot.context';
 import { ApiError, useServices } from '../services';
 import { queryError, setGenerating, setQueryResults } from '../store/copilot.actions';
 import type { CopilotError } from '../store/types';
+import type { TimeRange } from '../../common/types';
 
 /**
  * Owns KQL query execution against the backend.
@@ -34,7 +35,7 @@ function toCopilotError(error: unknown): CopilotError {
 }
 
 export interface UseQueryExecutionResult {
-  readonly executeQuery: (kql: string, indexPattern: string) => Promise<void>;
+  readonly executeQuery: (kql: string, indexPattern: string, timeRange?: TimeRange) => Promise<void>;
   readonly isExecuting: boolean;
   readonly error: CopilotError | null;
 }
@@ -46,7 +47,7 @@ export function useQueryExecution(): UseQueryExecutionResult {
   const [error, setError] = useState<CopilotError | null>(null);
 
   const executeQuery = useCallback(
-    async (kql: string, indexPattern: string): Promise<void> => {
+    async (kql: string, indexPattern: string, timeRange?: TimeRange): Promise<void> => {
       if (kql.trim().length === 0) {
         const err: CopilotError = { message: 'No KQL to run.', statusCode: null, requestId: null };
         setError(err);
@@ -58,7 +59,7 @@ export function useQueryExecution(): UseQueryExecutionResult {
       setError(null);
       dispatch(setGenerating(true));
       try {
-        const results = await queryApi.executeQuery(kql, indexPattern);
+        const results = await queryApi.executeQuery(kql, indexPattern, timeRange);
         dispatch(setQueryResults(results));
       } catch (e) {
         const err = toCopilotError(e);

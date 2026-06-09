@@ -123,7 +123,11 @@ export function CopilotProvider({ children, indexPattern, sessionId }: CopilotPr
     }
     dispatch(setGenerating(true));
     try {
-      const results = await services.queryApi.executeQuery(kql, stateRef.current.indexPattern);
+      const results = await services.queryApi.executeQuery(
+        kql,
+        stateRef.current.indexPattern,
+        stateRef.current.timeRange
+      );
       dispatch(setQueryResults(results));
     } catch (e) {
       dispatch(queryError(toCopilotError(e)));

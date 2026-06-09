@@ -17,6 +17,9 @@ export function createInitialState(indexPattern: string): CopilotState {
     error: null,
     queryResults: null,
     indexPattern,
+    // Default to the last 24 hours so results show even when the most recent
+    // logs are older than a few minutes; the time picker overrides this.
+    timeRange: { from: 'now-24h', to: 'now' },
   };
 }
 
@@ -73,6 +76,9 @@ export function copilotReducer(state: CopilotState, action: CopilotAction): Copi
 
     case COPILOT_ACTION_TYPES.SET_QUERY_RESULTS:
       return { ...state, queryResults: action.results, isGenerating: false };
+
+    case COPILOT_ACTION_TYPES.SET_TIME_RANGE:
+      return { ...state, timeRange: action.timeRange };
 
     case COPILOT_ACTION_TYPES.RESET_SESSION:
       return createInitialState(state.indexPattern);

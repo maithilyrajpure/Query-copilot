@@ -10,6 +10,12 @@ import { PLUGIN_ROUTE_PREFIX } from '../../common';
 const executeRequestBodySchema = schema.object({
   kql: schema.string({ minLength: 1, maxLength: 8192 }),
   indexPattern: schema.string({ minLength: 1, maxLength: 256 }),
+  timeRange: schema.maybe(
+    schema.object({
+      from: schema.string({ minLength: 1 }),
+      to: schema.string({ minLength: 1 }),
+    })
+  ),
 });
 
 type ExecuteRequestBody = TypeOf<typeof executeRequestBodySchema>;
@@ -47,6 +53,7 @@ export function registerExecutionRoutes(router: IRouter, context: QueryCopilotCo
         const result = await executor.execute({
           kql: body.kql,
           indexPattern: body.indexPattern,
+          timeRange: body.timeRange,
         });
 
         return response.ok({ headers, body: result });

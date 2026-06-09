@@ -17,6 +17,7 @@ import {
   setGenerating,
   setProviderState,
   setQueryResults,
+  setTimeRange,
   setValidationResult,
   updateKql,
 } from './copilot.actions';
@@ -65,7 +66,20 @@ describe('copilotReducer', () => {
       error: null,
       queryResults: null,
       indexPattern: 'logs-*',
+      timeRange: { from: 'now-24h', to: 'now' },
     });
+  });
+
+  it('createInitialState defaults the time range to the last 24 hours', () => {
+    expect(createInitialState('*').timeRange).toEqual({ from: 'now-24h', to: 'now' });
+  });
+
+  it('SET_TIME_RANGE replaces the time range', () => {
+    const next = copilotReducer(
+      createInitialState('*'),
+      setTimeRange({ from: 'now-10m', to: 'now' })
+    );
+    expect(next.timeRange).toEqual({ from: 'now-10m', to: 'now' });
   });
 
   it('INITIAL_COPILOT_STATE defaults to a wildcard index pattern', () => {

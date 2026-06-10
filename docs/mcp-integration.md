@@ -166,7 +166,8 @@ them. For the search path, `execution.routes.ts` maps the error to HTTP 500.
      -e ES_URL="https://<es-host>:9200" \
      -e ES_USERNAME="<user>" -e ES_PASSWORD="<pass>" \
      -e ES_SSL_SKIP_VERIFY=true \
-     docker.elastic.co/mcp/elasticsearch:0.4.6
+     docker.elastic.co/mcp/elasticsearch:0.4.6 \
+     http
    ```
 
 2. **Health check:**

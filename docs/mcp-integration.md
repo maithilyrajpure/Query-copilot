@@ -182,3 +182,21 @@ them. For the search path, `execution.routes.ts` maps the error to HTTP 500.
 
    - `queryCopilot: MCP SEARCH path ENABLED`
    - `queryCopilot: connected to MCP server`
+
+5. **Verify the live search path end-to-end** with the standalone smoke check:
+
+   ```bash
+   node scripts/mcp-search-smoke.mjs
+   ```
+
+   Expected: `PASS` for a populated match-all (`total > 0`, non-empty docs) and
+   for an empty no-match query (`total === 0`), then `OK — all smoke checks
+   passed`. It exits `0` on success, `1` on a failed check, and prints `SKIP`
+   (exit `0`) when the container is not reachable.
+
+> **Why the smoke check is a script, not a jest test:** the kbn jest environment
+> patches global `fetch`/web-streams, which makes the MCP SDK's streamable-HTTP
+> handshake hang — `connect()` never resolves under jest, though it is ~60ms in
+> plain Node. The deterministic two-block response PARSING is unit-tested with
+> mocks in `server/services/mcp/mcp.client.service.test.ts`; the live end-to-end
+> chain is covered by `scripts/mcp-search-smoke.mjs`.

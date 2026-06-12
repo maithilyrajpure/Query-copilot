@@ -52,16 +52,23 @@ export class PromptBuilder {
    *
    * @param intent   The classified investigation intent driving few-shot selection.
    * @param context  The resolved schema context (relevant ECS fields and index fields).
-   * @param history  The conversation so far; the last user message is treated as the request.
+   * @param history  Prior conversation turns, used purely as context for refinements.
+   * @param currentQuery The analyst's CURRENT request. When provided it is the
+   *   request the model must answer; `history` is then treated entirely as prior
+   *   context. When omitted, the last user message in `history` is used as the
+   *   request (legacy/fallback behaviour). Passing this explicitly avoids an
+   *   off-by-one where the model answers the previous turn because the caller's
+   *   `history` lags by one message.
    * @returns A {@link ProviderPrompt} with a deterministic generation temperature.
    */
   public buildGenerationPrompt(
     intent: InvestigationIntent,
     context: SchemaContext,
-    history: ConversationMessage[]
+    history: ConversationMessage[],
+    currentQuery?: string
   ): ProviderPrompt {
     const systemPrompt = this.buildSystemPrompt(context);
-    const userMessage = this.buildUserMessage(intent, context, history);
+    const userMessage = this.buildUserMessage(intent, context, history, currentQuery);
     return { systemPrompt, userMessage, temperature: GENERATION_TEMPERATURE };
   }
 
@@ -113,9 +120,17 @@ export class PromptBuilder {
   private buildUserMessage(
     intent: InvestigationIntent,
     context: SchemaContext,
-    history: ConversationMessage[]
+    history: ConversationMessage[],
+    currentQuery?: string
   ): string {
-    const { analystQuery, priorMessages } = this.resolveAnalystQuery(history, intent);
+    // Prefer the explicit current query (the pipeline passes request.query). Only
+    // fall back to digging the last user message out of history when no current
+    // query is supplied — the fallback is what caused the off-by-one when callers
+    // pass a history that lags by one turn.
+    const { analystQuery, priorMessages } =
+      currentQuery !== undefined && currentQuery.trim().length > 0
+        ? { analystQuery: currentQuery, priorMessages: this.stripTrailingRequest(history, currentQuery) }
+        : this.resolveAnalystQuery(history, intent);
 
     const sections: string[] = [];
     sections.push(this.formatFewShotExamples(intent.type));
@@ -132,6 +147,22 @@ export class PromptBuilder {
     );
 
     return sections.join('\n\n');
+  }
+
+  /**
+   * Drops a trailing user message equal to the current query so it is not
+   * rendered both in the "Conversation so far" block and as the analyst request.
+   * Most callers pass prior-turns-only history, in which case this is a no-op.
+   */
+  private stripTrailingRequest(
+    history: ConversationMessage[],
+    currentQuery: string
+  ): ConversationMessage[] {
+    const last = history[history.length - 1];
+    if (last !== undefined && last.role === 'user' && last.content.trim() === currentQuery.trim()) {
+      return history.slice(0, -1);
+    }
+    return history;
   }
 
   /**

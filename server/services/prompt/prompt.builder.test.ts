@@ -84,6 +84,37 @@ describe('PromptBuilder', () => {
       expect(result.temperature as number).toBeLessThanOrEqual(0.2);
     });
 
+    it('uses the explicit currentQuery as the request, not the last history message (off-by-one guard)', () => {
+      const builder = new PromptBuilder();
+      // History ends with the PREVIOUS turn; currentQuery is the new request.
+      const result: ProviderPrompt = builder.buildGenerationPrompt(
+        makeIntent(),
+        makeContext(),
+        [userMsg('show failed logins for the administrator account')],
+        'show successful logins for the root account'
+      );
+
+      // The analyst request section must reflect the CURRENT query.
+      expect(result.userMessage).toContain('## Analyst request\nshow successful logins for the root account');
+      // The previous turn is still available as prior context.
+      expect(result.userMessage).toContain('Conversation so far');
+      expect(result.userMessage).toContain('administrator');
+    });
+
+    it('does not duplicate the request when history already ends with the current query', () => {
+      const builder = new PromptBuilder();
+      const q = 'show failed logins for the administrator account';
+      const result: ProviderPrompt = builder.buildGenerationPrompt(
+        makeIntent(),
+        makeContext(),
+        [userMsg(q)],
+        q
+      );
+      // The single trailing user turn equals the request → no "Conversation so far" block.
+      expect(result.userMessage).not.toContain('Conversation so far');
+      expect(result.userMessage).toContain(`## Analyst request\n${q}`);
+    });
+
     it('includes the required JSON-output instruction', () => {
       const builder = new PromptBuilder();
       const result: ProviderPrompt = builder.buildGenerationPrompt(makeIntent(), makeContext(), [

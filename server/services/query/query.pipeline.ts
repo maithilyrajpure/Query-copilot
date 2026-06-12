@@ -261,7 +261,12 @@ export class QueryPipeline {
       const history: ConversationMessage[] = request.conversationHistory
         ? [...request.conversationHistory]
         : [];
-      const prompt = this.promptBuilder.buildGenerationPrompt(intent, schemaContext, history);
+      const prompt = this.promptBuilder.buildGenerationPrompt(
+        intent,
+        schemaContext,
+        history,
+        request.query
+      );
       ctx.addStage({ stage: 'query_generation', durationMs: Date.now() - tPrompt, success: true });
 
       // ── 6. Provider routing ───────────────────────────────────────────

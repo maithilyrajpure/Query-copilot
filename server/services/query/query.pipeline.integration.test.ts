@@ -82,9 +82,12 @@ function makeFakeLogger(): Logger {
 
 /**
  * Builds a deterministic ES index mapping. The valid-KQL fields
- * (`user.name`, `source.ip`, `event.outcome`) are present; the unknown field
- * used by the invalid KQL (`totally.bogus_field`) is deliberately absent — and
- * it is also not a recognized ECS field, so the validator flags it.
+ * (`user.name`, `source.ip`, `event.outcome`) are present.
+ *
+ * NOTE: invalidity is simulated with a SYNTAX error, not an unknown field.
+ * Unknown fields are advisory (non-blocking) in the validator — only a syntax
+ * error blocks and drives the correction loop, so that is what the
+ * correction/exhaustion scenarios below rely on.
  */
 function makeMapping(): ESIndexMapping {
   const fields = new Map<string, ESFieldMapping>();
@@ -97,11 +100,11 @@ function makeMapping(): ESIndexMapping {
   return { indexPattern: 'logs-*', fields, fetchedAt: new Date() };
 }
 
-// KQL fixtures. The valid KQL references only known fields; the invalid KQL
-// references `totally.bogus_field`, which is neither in the mapping nor in the
-// ECS catalogue, so it produces a deterministic field error.
+// KQL fixtures. The valid KQL references only known fields; the invalid KQL has
+// an unbalanced parenthesis, which `fromKueryExpression` cannot parse, producing
+// a deterministic SYNTAX error (the only thing that blocks validation now).
 const VALID_KQL = 'user.name : "admin" and event.outcome : "failure"';
-const INVALID_KQL = 'totally.bogus_field : "x"';
+const INVALID_KQL = 'user.name : "admin" and (';
 
 /**
  * Builds a {@link ProviderResponse} whose JSON `content` matches the unit

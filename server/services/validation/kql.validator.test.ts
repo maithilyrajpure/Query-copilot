@@ -28,15 +28,21 @@ describe('KQLValidatorService', () => {
       expect(result.ecsFieldCoverage).toBe('2/2');
     });
 
-    it('flags an unknown field as a field error', () => {
+    it('reports an unknown field as an advisory warning, not a blocking error', () => {
       const result = svc.validate(
         'user.name : "admin" and totally.bogus.field : "x"',
         makeContext(['user.name'])
       );
 
-      expect(result.valid).toBe(false);
-      expect(result.fieldErrors).toHaveLength(1);
-      expect(result.fieldErrors[0].field).toBe('totally.bogus.field');
+      // Unknown fields no longer fail validation — the index mapping may be
+      // incomplete and the KQL is syntactically valid, so it must still run.
+      expect(result.valid).toBe(true);
+      expect(result.fieldErrors).toHaveLength(0);
+      expect(
+        result.warnings.some(
+          (w) => w.includes('totally.bogus.field') && /not be found|not found|may not match/i.test(w)
+        )
+      ).toBe(true);
     });
 
     it('reports a syntax error and skips field validation', () => {

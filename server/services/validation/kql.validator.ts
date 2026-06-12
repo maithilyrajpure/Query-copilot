@@ -36,13 +36,20 @@ import type { FieldValidationError } from './field.validator';
  * `../../../common/types` (see the file-level note above).
  */
 export interface ValidationResult {
-  /** True only when the KQL parsed AND every referenced field is allowed. */
+  /**
+   * True when the KQL parsed. Unknown fields do NOT make a query invalid — they
+   * are reported as advisory {@link warnings} (see `validate`), so `valid` is
+   * effectively "syntactically valid". Only a syntax error sets this false.
+   */
   readonly valid: boolean;
   /** Syntax errors from the parse step; empty when the KQL parsed. */
   readonly syntaxErrors: SyntaxError[];
-  /** Unknown-field errors from the field step; empty when syntax failed. */
+  /**
+   * Field errors. Unknown fields are now advisory (reported in {@link warnings}),
+   * so this is empty in normal operation; retained in the shape for compatibility.
+   */
   readonly fieldErrors: FieldValidationError[];
-  /** Non-fatal advisories (e.g. valid-but-non-ECS fields). */
+  /** Non-fatal advisories (valid-but-non-ECS fields AND unknown fields). */
   readonly warnings: string[];
   /** The recognized ECS fields actually referenced by the query. */
   readonly ecsFieldsUsed: ECSField[];
@@ -103,17 +110,33 @@ export class KQLValidatorService {
       .filter((f): f is ECSField => f !== undefined);
 
     const totalFieldsInQuery = fieldResult.fields.length;
-    const warnings = this.buildWarnings(
-      fieldResult.fields,
-      ecsFieldsUsed,
-      fieldResult.unknownFields,
-      schemaContext
+
+    // Unknown fields are ADVISORY, not blocking. The index mapping fed to the
+    // validator is frequently incomplete (dynamic, runtime, and multi-fields are
+    // not always enumerated, and custom schemas vary widely), while the KQL here
+    // is already syntactically valid. Refusing to return a generated query
+    // because a field "looks unknown" is the wrong default for a query assistant
+    // — Elasticsearch is the real arbiter of whether a field matches documents.
+    // So we surface unknown fields as warnings and let the query run; only a
+    // SYNTAX error (handled above) blocks and drives the correction loop.
+    const unknownFieldWarnings = fieldResult.unknownFields.map(
+      (f) =>
+        `Field "${f}" was not found in the target index mapping or ECS catalogue; it may not match any documents.`
     );
+    const warnings = [
+      ...this.buildWarnings(
+        fieldResult.fields,
+        ecsFieldsUsed,
+        fieldResult.unknownFields,
+        schemaContext
+      ),
+      ...unknownFieldWarnings,
+    ];
 
     return {
-      valid: fieldResult.errors.length === 0,
+      valid: true,
       syntaxErrors: [],
-      fieldErrors: fieldResult.errors,
+      fieldErrors: [],
       warnings,
       ecsFieldsUsed,
       totalFieldsInQuery,

@@ -10,10 +10,10 @@ function makeRedis(status = 'ready') {
   return { status, get: jest.fn(), set: jest.fn().mockResolvedValue('OK') };
 }
 
-function makeConfig() {
+function makeConfig(cacheEnabled = true) {
   return {
     getRedisConfig: jest.fn().mockReturnValue({ host: 'h', port: 6379, ttl: 300 }),
-    isCacheEnabled: jest.fn().mockReturnValue(true),
+    isCacheEnabled: jest.fn().mockReturnValue(cacheEnabled),
   };
 }
 
@@ -27,11 +27,15 @@ function makeLogger() {
   };
 }
 
-function makeService(redis: ReturnType<typeof makeRedis>, logger = makeLogger()) {
+function makeService(
+  redis: ReturnType<typeof makeRedis>,
+  logger = makeLogger(),
+  cacheEnabled = true
+) {
   return {
     svc: new CacheService(
       redis as unknown as Redis,
-      makeConfig() as unknown as ConfigService,
+      makeConfig(cacheEnabled) as unknown as ConfigService,
       logger as unknown as LoggerService
     ),
     logger,
@@ -137,6 +141,29 @@ describe('CacheService', () => {
     it('is false when status is end', () => {
       const { svc } = makeService(makeRedis('end'));
       expect(svc.isAvailable()).toBe(false);
+    });
+
+    it('is false when caching is disabled via config even if status is ready', () => {
+      const { svc } = makeService(makeRedis('ready'), makeLogger(), false);
+      expect(svc.isAvailable()).toBe(false);
+    });
+  });
+
+  describe('cacheEnabled config gate', () => {
+    it('get returns null without touching redis when caching is disabled', async () => {
+      const redis = makeRedis('ready');
+      const { svc } = makeService(redis, makeLogger(), false);
+
+      expect(await svc.get('k')).toBeNull();
+      expect(redis.get).not.toHaveBeenCalled();
+    });
+
+    it('set is a no-op without touching redis when caching is disabled', async () => {
+      const redis = makeRedis('ready');
+      const { svc } = makeService(redis, makeLogger(), false);
+
+      await expect(svc.set('k', result)).resolves.toBeUndefined();
+      expect(redis.set).not.toHaveBeenCalled();
     });
   });
 });

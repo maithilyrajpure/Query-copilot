@@ -6,7 +6,8 @@
  * written with a TTL so stale results expire automatically.
  *
  * The service is designed to degrade gracefully: Redis is treated as a best-
- * effort accelerator, never a hard dependency. When the connection is not in
+ * effort accelerator, never a hard dependency. When caching is disabled via
+ * config (`queryCopilot.pipeline.cacheEnabled: false`), the connection is not in
  * its `'ready'` state, or when any Redis/serialization error occurs, reads
  * return `null` (a cache miss) and writes silently do nothing. No method on
  * this service ever throws — unexpected errors are logged via
@@ -66,8 +67,13 @@ export class CacheService {
     }
   }
 
-  /** True only when the Redis connection is ready to serve commands. */
+  /**
+   * True only when caching is enabled via config AND the Redis connection is
+   * ready to serve commands. When `queryCopilot.pipeline.cacheEnabled` is false
+   * this returns false, so `get` always misses and `set` is a no-op — the
+   * single switch that turns the cache layer on or off.
+   */
   isAvailable(): boolean {
-    return this.redis.status === 'ready';
+    return this.config.isCacheEnabled() && this.redis.status === 'ready';
   }
 }

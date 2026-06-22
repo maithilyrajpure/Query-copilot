@@ -39,6 +39,7 @@ function makeContext(): SchemaContext {
       'some.unrelated.field',
     ],
     fieldOverlap: ['event.category', 'event.outcome', 'source.ip', 'user.name'],
+    fieldValues: new Map(),
   };
 }
 
@@ -178,6 +179,7 @@ describe('PromptBuilder', () => {
         relevantECSFields: ECSRegistry.getFieldsByInvestigationType('brute_force'),
         availableIndexFields: ['@timestamp', 'http.response.status_code', 'source.ip', 'url.path'],
         fieldOverlap: [],
+        fieldValues: new Map(),
       };
 
       const result = builder.buildGenerationPrompt(makeIntent(), context, [
@@ -197,6 +199,7 @@ describe('PromptBuilder', () => {
         relevantECSFields: ECSRegistry.getFieldsByInvestigationType('brute_force'),
         availableIndexFields: [...noise, 'http.response.status_code'],
         fieldOverlap: ['http.response.status_code'],
+        fieldValues: new Map(),
       };
 
       const result = builder.buildGenerationPrompt(makeIntent(), context, [
@@ -211,6 +214,40 @@ describe('PromptBuilder', () => {
     });
   });
 
+  describe('known field values', () => {
+    it('renders sampled values and the prefer-real-values instruction', () => {
+      const builder = new PromptBuilder();
+      const context: SchemaContext = {
+        relevantECSFields: ECSRegistry.getFieldsByInvestigationType('brute_force'),
+        availableIndexFields: ['event.action', 'event.category', 'http.response.status_code'],
+        fieldOverlap: ['event.category'],
+        fieldValues: new Map<string, readonly string[]>([
+          ['event.action', ['login', 'logout']],
+          ['event.category', ['web', 'cron']],
+          ['http.response.status_code', ['401', '200']],
+        ]),
+      };
+
+      const result = builder.buildGenerationPrompt(makeIntent(), context, [
+        userMsg('show failed login attempts'),
+      ]);
+
+      expect(result.userMessage).toContain('Known values for fields');
+      expect(result.userMessage).toContain('- event.action: login, logout');
+      expect(result.userMessage).toContain('- http.response.status_code: 401, 200');
+      expect(result.userMessage).toContain('prefer them over guessed');
+    });
+
+    it('renders nothing extra when fieldValues is empty', () => {
+      const builder = new PromptBuilder();
+      const result = builder.buildGenerationPrompt(makeIntent(), makeContext(), [
+        userMsg('show failed login attempts'),
+      ]);
+
+      expect(result.userMessage).not.toContain('Known values for fields');
+    });
+  });
+
   describe('schema truncation', () => {
     it('reports truncation when the available index field list exceeds the render cap', () => {
       const builder = new PromptBuilder();
@@ -218,6 +255,7 @@ describe('PromptBuilder', () => {
         relevantECSFields: ECSRegistry.getFieldsByInvestigationType('brute_force'),
         availableIndexFields: Array.from({ length: 130 }, (_, i) => `field_${i}`),
         fieldOverlap: ['event.category', 'event.outcome', 'source.ip', 'user.name'],
+        fieldValues: new Map(),
       };
 
       const result = builder.buildGenerationPrompt(makeIntent(), context, [

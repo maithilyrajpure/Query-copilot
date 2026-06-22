@@ -46,6 +46,15 @@ export interface SchemaContext {
    * be present in the target index.
    */
   readonly fieldOverlap: readonly string[];
+  /**
+   * Real values sampled from the target index for a curated set of high-signal,
+   * low-cardinality fields, keyed by queryable field name. Empty when value
+   * sampling was skipped or yielded nothing.
+   *
+   * A downstream query builder should prefer these EXACT values over
+   * guessed/ECS-convention literals, so generated queries match real documents.
+   */
+  readonly fieldValues: ReadonlyMap<string, readonly string[]>;
 }
 
 /**
@@ -66,11 +75,15 @@ export class ECSContextMapper {
    *
    * @param intent - The classified investigation intent.
    * @param esMapping - The fetched field mapping for the target index.
+   * @param fieldValues - Real values sampled for high-signal fields, keyed by
+   *   queryable field name. Defaults to an empty map (no sampled values), which
+   *   preserves all prior behaviour.
    * @returns A frozen schema context fusing ECS knowledge with the index mapping.
    */
   public buildContext(
     intent: InvestigationIntent,
-    esMapping: ESIndexMapping
+    esMapping: ESIndexMapping,
+    fieldValues: ReadonlyMap<string, readonly string[]> = new Map()
   ): SchemaContext {
     const registryFields: readonly ECSField[] =
       ECSRegistry.getFieldsByInvestigationType(intent.type);
@@ -97,6 +110,7 @@ export class ECSContextMapper {
       relevantECSFields,
       availableIndexFields,
       fieldOverlap,
+      fieldValues: Object.freeze(fieldValues),
     });
   }
 

@@ -36,7 +36,7 @@ import type { ProviderCredential, RequestCredentials } from '../common/types';
 import { defineRoutes } from './routes';
 import { CacheService, RedisClientFactory } from './services/cache';
 import { QueryNormalizer, IntentExtractorService } from './services/intent';
-import { ESMappingFetcher, ECSContextMapper } from './services/schema';
+import { ESMappingFetcher, FieldValuesFetcher, ECSContextMapper } from './services/schema';
 import { PromptBuilder } from './services/prompt';
 import { KQLValidatorService } from './services/validation';
 import { CorrectionEngine, CorrectionPromptBuilder } from './services/correction';
@@ -232,6 +232,7 @@ export class QueryCopilotPlugin
         normalizer,
         intentExtractor,
         new ESMappingFetcher(esClient, esMappingLogger),
+        new FieldValuesFetcher(esClient, esMappingLogger),
         ecsMapper,
         promptBuilder,
         requestRouter,

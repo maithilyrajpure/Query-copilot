@@ -26,7 +26,7 @@ import { CacheService } from '../cache';
 import type { ConfigService } from '../config';
 import { QueryNormalizer, IntentExtractorService } from '../intent';
 import { ECSContextMapper } from '../schema';
-import type { ESMappingFetcher, ESIndexMapping, ESFieldMapping } from '../schema';
+import type { ESMappingFetcher, FieldValuesFetcher, ESIndexMapping, ESFieldMapping } from '../schema';
 import { PromptBuilder } from '../prompt';
 import type { ProviderRouter, ProviderResponse } from '../providers';
 import { ProviderUnavailableError } from '../providers';
@@ -158,6 +158,9 @@ function buildPipeline(routeMock: jest.Mock): Harness {
   const esMappingFetcher = {
     fetchIndexMappings,
   } as unknown as ESMappingFetcher;
+  const fieldValuesFetcher = {
+    fetchValues: jest.fn().mockResolvedValue(new Map<string, string[]>()),
+  } as unknown as FieldValuesFetcher;
   const ecsMapper = new ECSContextMapper();
   const promptBuilder = new PromptBuilder();
   const providerRouter = { route: routeMock } as unknown as ProviderRouter;
@@ -178,6 +181,7 @@ function buildPipeline(routeMock: jest.Mock): Harness {
     normalizer,
     intentExtractor,
     esMappingFetcher,
+    fieldValuesFetcher,
     ecsMapper,
     promptBuilder,
     providerRouter,

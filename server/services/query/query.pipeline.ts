@@ -53,7 +53,7 @@ import { SYSTEM_PROMPT_VERSION } from '../prompt';
 
 import { CacheKeyBuilder, type CacheService } from '../cache';
 import type { QueryNormalizer, IntentExtractorService, NormalizedQuery } from '../intent';
-import type { ESMappingFetcher, ECSContextMapper } from '../schema';
+import type { ESMappingFetcher, ECSContextMapper, FieldValuesFetcher } from '../schema';
 import type { IndexMappingProvider } from '../schema/es.mapping.fetcher';
 import type { PromptBuilder } from '../prompt';
 import type { ProviderRouter, ProviderResponse } from '../providers';
@@ -100,6 +100,12 @@ export class QueryPipeline {
     private readonly normalizer: QueryNormalizer,
     private readonly intentExtractor: IntentExtractorService,
     private readonly esMappingFetcher: ESMappingFetcher,
+    /**
+     * Samples real values for a curated set of high-signal fields so the prompt
+     * can steer the model towards literals that actually exist in the index.
+     * Best-effort and fast: it never throws and never blocks generation.
+     */
+    private readonly fieldValuesFetcher: FieldValuesFetcher,
     private readonly ecsMapper: ECSContextMapper,
     private readonly promptBuilder: PromptBuilder,
     private readonly providerRouter: ProviderRouter,
@@ -245,7 +251,15 @@ export class QueryPipeline {
       const esMapping = await (this.mcpMappingProvider ?? this.esMappingFetcher).fetchIndexMappings(
         request.indexPattern
       );
-      const schemaContext = this.ecsMapper.buildContext(intent, esMapping);
+      // Sample real values for high-signal fields so the model uses literals that
+      // actually exist (e.g. event.action:"login" instead of a guessed ECS value).
+      // Best-effort and graceful: this never throws and never blocks generation,
+      // and runs against the per-request esClient independently of the mapping source.
+      const fieldValues = await this.fieldValuesFetcher.fetchValues(
+        request.indexPattern,
+        esMapping
+      );
+      const schemaContext = this.ecsMapper.buildContext(intent, esMapping, fieldValues);
       ctx.addStage({
         stage: 'schema_context',
         durationMs: Date.now() - tSchema,
@@ -253,6 +267,7 @@ export class QueryPipeline {
         metadata: {
           availableFields: schemaContext.availableIndexFields.length,
           fieldOverlap: schemaContext.fieldOverlap.length,
+          valueFields: fieldValues.size,
         },
       });
 

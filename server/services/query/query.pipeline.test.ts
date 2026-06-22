@@ -2,7 +2,7 @@ import { QueryPipeline } from './query.pipeline';
 import type { QueryGenerationRequest } from './query.pipeline';
 import type { CacheService } from '../cache';
 import type { QueryNormalizer, IntentExtractorService, NormalizedQuery } from '../intent';
-import type { ESMappingFetcher, ECSContextMapper } from '../schema';
+import type { ESMappingFetcher, FieldValuesFetcher, ECSContextMapper } from '../schema';
 import type { PromptBuilder } from '../prompt';
 import type { ProviderRouter, ProviderResponse } from '../providers';
 import type { KQLValidatorService, ValidationResult } from '../validation';
@@ -45,6 +45,7 @@ const schemaContext: SchemaContext = {
   relevantECSFields: [],
   availableIndexFields: ['user.name', 'source.ip'],
   fieldOverlap: ['user.name'],
+  fieldValues: new Map(),
 };
 
 const providerResponse: ProviderResponse = {
@@ -115,6 +116,9 @@ function makeMocks() {
         .fn()
         .mockResolvedValue({ indexPattern: 'logs-*', fields: new Map(), fetchedAt: new Date() }),
     },
+    fieldValuesFetcher: {
+      fetchValues: jest.fn().mockResolvedValue(new Map<string, string[]>()),
+    },
     ecsMapper: { buildContext: jest.fn().mockReturnValue(schemaContext) },
     promptBuilder: {
       buildGenerationPrompt: jest.fn().mockReturnValue({ systemPrompt: 'sys', userMessage: 'user' }),
@@ -150,6 +154,7 @@ function makePipeline(m: Mocks, mcpMappingProvider?: IndexMappingProvider): Quer
     m.normalizer as unknown as QueryNormalizer,
     m.intentExtractor as unknown as IntentExtractorService,
     m.esMappingFetcher as unknown as ESMappingFetcher,
+    m.fieldValuesFetcher as unknown as FieldValuesFetcher,
     m.ecsMapper as unknown as ECSContextMapper,
     m.promptBuilder as unknown as PromptBuilder,
     m.providerRouter as unknown as ProviderRouter,
@@ -356,8 +361,9 @@ describe('QueryPipeline', () => {
       expect(mcpMappingProvider.fetchIndexMappings).toHaveBeenCalledWith(request.indexPattern);
       // ...and the asCurrentUser fetcher is bypassed entirely (no silent dual-read).
       expect(m.esMappingFetcher.fetchIndexMappings).not.toHaveBeenCalled();
-      // ...and that mapping reaches the ECS context builder.
-      expect(m.ecsMapper.buildContext).toHaveBeenCalledWith(intent, mapping);
+      // ...and that mapping reaches the ECS context builder, alongside the
+      // (best-effort, here empty) sampled field values.
+      expect(m.ecsMapper.buildContext).toHaveBeenCalledWith(intent, mapping, new Map());
     });
 
     it('MCP-UNREACHABLE: surfaces the typed error as a failed result with NO fallback', async () => {

@@ -128,6 +128,32 @@ describe('ECSContextMapper', () => {
     });
   });
 
+  describe('fieldValues', () => {
+    it('defaults to an empty map when no values are provided', () => {
+      const intent = makeIntent();
+      const mapping = makeMapping('logs-*', ['event.category']);
+
+      const context = mapper.buildContext(intent, mapping);
+
+      expect(context.fieldValues.size).toBe(0);
+    });
+
+    it('flows the provided sampled values through into the context', () => {
+      const intent = makeIntent();
+      const mapping = makeMapping('logs-*', ['event.action']);
+      const fieldValues = new Map<string, readonly string[]>([
+        ['event.action', ['login', 'logout']],
+      ]);
+
+      const context = mapper.buildContext(intent, mapping, fieldValues);
+
+      expect(Array.from(context.fieldValues.get('event.action') ?? [])).toEqual([
+        'login',
+        'logout',
+      ]);
+    });
+  });
+
   describe('empty mapping', () => {
     it('yields empty availableIndexFields and empty fieldOverlap', () => {
       const intent = makeIntent({ type: 'brute_force' });

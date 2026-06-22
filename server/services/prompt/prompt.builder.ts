@@ -33,6 +33,8 @@ const GENERATION_TEMPERATURE = 0.1;
 const MAX_HISTORY_MESSAGES = 10;
 /** Maximum number of available index fields listed; truncation is reported explicitly. */
 const MAX_AVAILABLE_FIELDS_RENDERED = 100;
+/** Maximum number of sampled values rendered per field in the known-values block. */
+const MAX_FIELD_VALUES_RENDERED = 12;
 
 /**
  * Assembles {@link ProviderPrompt} instances for KQL generation and correction.
@@ -242,7 +244,41 @@ export class PromptBuilder {
       }
     }
 
-    return `${header}\n${overlapLine}\n${availableLine}`;
+    const valuesBlock = this.formatFieldValues(context.fieldValues);
+
+    const lines = [header, overlapLine, availableLine];
+    if (valuesBlock) {
+      lines.push(valuesBlock);
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * Renders the "known field values" block: for each field with sampled values,
+   * a line listing the real values present in the index, plus an instruction to
+   * prefer them over guessed/ECS-convention literals. Returns '' when no field
+   * has sampled values (preserving prior behaviour).
+   */
+  private formatFieldValues(fieldValues: ReadonlyMap<string, readonly string[]>): string {
+    if (fieldValues.size === 0) {
+      return '';
+    }
+    const valueLines: string[] = [];
+    for (const [field, values] of fieldValues) {
+      if (values.length === 0) {
+        continue;
+      }
+      const shown = values.slice(0, MAX_FIELD_VALUES_RENDERED);
+      valueLines.push(`- ${field}: ${shown.join(', ')}`);
+    }
+    if (valueLines.length === 0) {
+      return '';
+    }
+    const header = 'Known values for fields (use these EXACT values when querying that field):';
+    const instruction =
+      'These are the real values present in the index — prefer them over guessed or ' +
+      'ECS-convention values.';
+    return `${header}\n${valueLines.join('\n')}\n${instruction}`;
   }
 
   /** Builds the correction instruction appended to the original user message. */

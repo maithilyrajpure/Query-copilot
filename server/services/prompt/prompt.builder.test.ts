@@ -235,7 +235,7 @@ describe('PromptBuilder', () => {
       expect(result.userMessage).toContain('Known values for fields');
       expect(result.userMessage).toContain('- event.action: login, logout');
       expect(result.userMessage).toContain('- http.response.status_code: 401, 200');
-      expect(result.userMessage).toContain('prefer them over guessed');
+      expect(result.userMessage).toContain('HARD RULE');
     });
 
     it('renders nothing extra when fieldValues is empty', () => {

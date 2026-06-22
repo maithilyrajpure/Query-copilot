@@ -203,7 +203,13 @@ export class PromptBuilder {
         `Explanation: ${example.explanation}`,
       ].join('\n');
     });
-    return `${header}\n${blocks.join('\n\n')}`;
+    const disclaimer =
+      'These examples illustrate KQL SYNTAX and reasoning ONLY. The specific field ' +
+      'names and values in them (e.g. event.category : "authentication") are generic ' +
+      'ECS conventions and frequently do NOT exist in the target index. Do NOT copy ' +
+      'their fields or values. Build your query from the "Target index schema" and ' +
+      '"Known values" sections below, substituting the real fields/values for this index.';
+    return `${header}\n${disclaimer}\n\n${blocks.join('\n\n')}`;
   }
 
   /** Renders the most recent conversation turns; returns '' when there are none. */
@@ -274,10 +280,15 @@ export class PromptBuilder {
     if (valueLines.length === 0) {
       return '';
     }
-    const header = 'Known values for fields (use these EXACT values when querying that field):';
+    const header = 'Known values for fields (the ONLY valid values for these fields in this index):';
     const instruction =
-      'These are the real values present in the index — prefer them over guessed or ' +
-      'ECS-convention values.';
+      'HARD RULE: for any field listed here, you may ONLY use a value from its list. ' +
+      'These are the actual values in the index. Ignore conflicting values shown in the ' +
+      'examples or field descriptions (e.g. event.category : "authentication") — if that ' +
+      'value is not in the list above, it matches ZERO documents, so do not use it. ' +
+      'For "failed login"-type requests, prefer event.outcome : "failure" with ' +
+      'event.action : "login", or the relevant http.response.status_code, based on the ' +
+      'values above.';
     return `${header}\n${valueLines.join('\n')}\n${instruction}`;
   }
 

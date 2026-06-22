@@ -57,7 +57,7 @@ const ECS_FIELDS: readonly ECSField[] = Object.freeze([
     type: 'keyword',
     category: 'event',
     description:
-      'High-level event categorization used for filtering (e.g. authentication, process, network).',
+      'High-level event categorization used for filtering. Category values vary by data source — use only the values listed in the index’s known values, never a guessed one.',
     isRequired: false,
     isMultiValue: true,
     normalizationLevel: 'core',

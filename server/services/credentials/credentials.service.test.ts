@@ -35,10 +35,16 @@ function makeService(scoped = makeScopedClient(), eso = makeEsoClient()) {
 
 describe('CredentialsService', () => {
   describe('idForUser', () => {
-    it('derives a deterministic, sanitised id', () => {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    it('derives a deterministic UUID per user (required by encrypted saved objects)', () => {
       const { service } = makeService();
-      expect(service.idForUser('alice')).toBe('creds:alice');
-      expect(service.idForUser('a/b c@d')).toBe('creds:a_b_c_d');
+      // Encrypted SOs reject predefined non-UUID ids, so the id must be a UUID.
+      expect(service.idForUser('alice')).toMatch(UUID_RE);
+      // Deterministic: same username -> same id (idempotent upsert).
+      expect(service.idForUser('alice')).toBe(service.idForUser('alice'));
+      // Distinct usernames -> distinct ids.
+      expect(service.idForUser('alice')).not.toBe(service.idForUser('bob'));
     });
   });
 
@@ -55,7 +61,7 @@ describe('CredentialsService', () => {
       expect(scoped.create).toHaveBeenCalledTimes(1);
       const [type, attrs, opts] = scoped.create.mock.calls[0];
       expect(type).toBe(CREDENTIALS_SO_TYPE);
-      expect(opts).toEqual({ id: 'creds:alice', overwrite: true });
+      expect(opts).toEqual({ id: service.idForUser('alice'), overwrite: true });
       expect((attrs as CredentialsSOAttributes).primaryApiKey).toBe('sk-123');
       expect((attrs as CredentialsSOAttributes).fallbackEnabled).toBe(false);
     });
@@ -177,7 +183,7 @@ describe('CredentialsService', () => {
       });
       expect(eso.getDecryptedAsInternalUser).toHaveBeenCalledWith(
         CREDENTIALS_SO_TYPE,
-        'creds:alice'
+        service.idForUser('alice')
       );
     });
 
@@ -212,7 +218,7 @@ describe('CredentialsService', () => {
       const { service, scoped } = makeService();
       scoped.delete.mockResolvedValue({});
       await service.deleteForUser('alice');
-      expect(scoped.delete).toHaveBeenCalledWith(CREDENTIALS_SO_TYPE, 'creds:alice');
+      expect(scoped.delete).toHaveBeenCalledWith(CREDENTIALS_SO_TYPE, service.idForUser('alice'));
     });
 
     it('ignores a 404 (already deleted)', async () => {

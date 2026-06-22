@@ -1,3 +1,4 @@
+import { v5 as uuidv5 } from 'uuid';
 import {
   SavedObjectsErrorHelpers,
   type SavedObjectsClientContract,
@@ -63,6 +64,14 @@ export interface MaskedCredentials {
  */
 export type ScopedSoClientFactory = () => SavedObjectsClientContract;
 
+/**
+ * Fixed namespace for deriving per-user credential ids via UUIDv5. Encrypted
+ * saved objects reject a predefined id unless it is a UUID (see
+ * SavedObjectsUtils.isRandomId), so we map the username to a deterministic
+ * UUID rather than using a human-readable id.
+ */
+const CREDENTIALS_ID_NAMESPACE = 'b6c7f3a0-9d2e-4c1b-8a5f-3e7d6c4b2a10';
+
 export class CredentialsService {
   constructor(
     /** ESO start client scoped to the credentials hidden type, for decryption. */
@@ -72,13 +81,14 @@ export class CredentialsService {
   ) {}
 
   /**
-   * Deterministic saved object id for a user. We key on the authenticated
-   * `username` (stable across sessions and human-readable); it is sanitised to
-   * a conservative id charset so it is always a valid SO id.
+   * Deterministic saved object id for a user. Keyed on the authenticated
+   * `username` (stable across sessions) but emitted as a UUIDv5, because
+   * encryptedSavedObjects rejects a predefined id for an encrypted object
+   * unless it is a UUID. Same username -> same id (idempotent upsert);
+   * different usernames -> different ids.
    */
   public idForUser(username: string): string {
-    const safe = username.replace(/[^a-zA-Z0-9_.-]/g, '_');
-    return `creds:${safe}`;
+    return uuidv5(username, CREDENTIALS_ID_NAMESPACE);
   }
 
   /**

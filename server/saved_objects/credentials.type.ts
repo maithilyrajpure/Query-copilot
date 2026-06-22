@@ -26,12 +26,20 @@ export interface CredentialsSOAttributes {
   primaryEndpoint?: string;
   /** Encrypted at rest. Absent when the provider needs no key (e.g. ollama). */
   primaryApiKey?: string;
+  /**
+   * Plaintext flag mirroring whether {@link primaryApiKey} is set. Required
+   * because a non-decrypting read STRIPS the encrypted key, so masked reads
+   * cannot infer key presence from `primaryApiKey` — they read this instead.
+   */
+  primaryHasKey?: boolean;
   fallbackEnabled: boolean;
   fallbackProvider?: ProviderName;
   fallbackModel?: string;
   fallbackEndpoint?: string;
   /** Encrypted at rest. Absent when the fallback provider needs no key. */
   fallbackApiKey?: string;
+  /** Plaintext flag mirroring whether {@link fallbackApiKey} is set. */
+  fallbackHasKey?: boolean;
 }
 
 /**
@@ -51,11 +59,13 @@ export const credentialsType: SavedObjectsType = {
       primaryModel: { type: 'keyword' },
       primaryEndpoint: { type: 'keyword' },
       primaryApiKey: { type: 'binary' },
+      primaryHasKey: { type: 'boolean' },
       fallbackEnabled: { type: 'boolean' },
       fallbackProvider: { type: 'keyword' },
       fallbackModel: { type: 'keyword' },
       fallbackEndpoint: { type: 'keyword' },
       fallbackApiKey: { type: 'binary' },
+      fallbackHasKey: { type: 'boolean' },
     },
   },
   management: {

@@ -49,9 +49,9 @@ describe('CredentialsService', () => {
   });
 
   describe('saveForUser', () => {
-    it('creates the SO with overwrite and an explicit id', async () => {
-      const { service, scoped } = makeService();
-      scoped.get.mockRejectedValue(notFound());
+    it('creates the SO with overwrite, an explicit id, and a hasKey flag', async () => {
+      const { service, scoped, eso } = makeService();
+      eso.getDecryptedAsInternalUser.mockRejectedValue(notFound());
 
       await service.saveForUser('alice', {
         primary: { provider: 'openai', model: 'gpt-4o', apiKey: 'sk-123' },
@@ -63,15 +63,18 @@ describe('CredentialsService', () => {
       expect(type).toBe(CREDENTIALS_SO_TYPE);
       expect(opts).toEqual({ id: service.idForUser('alice'), overwrite: true });
       expect((attrs as CredentialsSOAttributes).primaryApiKey).toBe('sk-123');
+      expect((attrs as CredentialsSOAttributes).primaryHasKey).toBe(true);
       expect((attrs as CredentialsSOAttributes).fallbackEnabled).toBe(false);
     });
 
-    it('preserves the existing key when none is supplied on update', async () => {
-      const { service, scoped } = makeService();
-      scoped.get.mockResolvedValue({
+    it('preserves the existing (decrypted) key when none is supplied on update', async () => {
+      const { service, scoped, eso } = makeService();
+      // Existing key must be read WITH decryption, else it would be wiped.
+      eso.getDecryptedAsInternalUser.mockResolvedValue({
         attributes: {
           primaryProvider: 'openai',
           primaryApiKey: 'sk-existing',
+          primaryHasKey: true,
           fallbackEnabled: false,
         } as CredentialsSOAttributes,
       });
@@ -83,12 +86,13 @@ describe('CredentialsService', () => {
 
       const attrs = scoped.create.mock.calls[0][1] as CredentialsSOAttributes;
       expect(attrs.primaryApiKey).toBe('sk-existing');
+      expect(attrs.primaryHasKey).toBe(true);
       expect(attrs.primaryModel).toBe('gpt-4o-mini');
     });
 
-    it('stores fallback key only when fallback is enabled', async () => {
-      const { service, scoped } = makeService();
-      scoped.get.mockRejectedValue(notFound());
+    it('stores fallback key + flag only when fallback is enabled', async () => {
+      const { service, scoped, eso } = makeService();
+      eso.getDecryptedAsInternalUser.mockRejectedValue(notFound());
 
       await service.saveForUser('alice', {
         primary: { provider: 'openai', apiKey: 'sk-1' },
@@ -99,6 +103,7 @@ describe('CredentialsService', () => {
       expect(attrs.fallbackEnabled).toBe(true);
       expect(attrs.fallbackProvider).toBe('anthropic');
       expect(attrs.fallbackApiKey).toBe('sk-2');
+      expect(attrs.fallbackHasKey).toBe(true);
     });
   });
 
@@ -109,17 +114,19 @@ describe('CredentialsService', () => {
       await expect(service.getMaskedForUser('alice')).resolves.toBeNull();
     });
 
-    it('returns metadata + hasKey but NEVER the raw key', async () => {
+    it('derives hasKey from the plaintext flag (encrypted keys are stripped on a masked read)', async () => {
       const { service, scoped } = makeService();
+      // A non-decrypting read does NOT return primaryApiKey/fallbackApiKey; the
+      // hasKey flags are what masked reads rely on.
       scoped.get.mockResolvedValue({
         attributes: {
           primaryProvider: 'openai',
           primaryModel: 'gpt-4o',
           primaryEndpoint: undefined,
-          primaryApiKey: 'sk-secret',
+          primaryHasKey: true,
           fallbackEnabled: true,
           fallbackProvider: 'anthropic',
-          fallbackApiKey: 'sk-secret-2',
+          fallbackHasKey: true,
         } as CredentialsSOAttributes,
       });
 

@@ -100,23 +100,33 @@ export class CredentialsService {
     const id = this.idForUser(username);
     const client = this.getScopedClient();
 
-    const existing = await this.readRaw(client, id);
+    // Read existing WITH decryption so an omitted apiKey preserves the stored
+    // key. A non-decrypting read strips the encrypted keys, which would
+    // silently wipe the key whenever the user edits provider/model only.
+    const existing = await this.readDecrypted(id);
 
     const fallback = input.fallback ?? null;
     const fallbackEnabled = fallback?.enabled ?? false;
+
+    const primaryApiKey = pickKey(input.primary.apiKey, existing?.primaryApiKey);
+    const fallbackApiKey = fallbackEnabled
+      ? pickKey(fallback?.apiKey, existing?.fallbackApiKey)
+      : undefined;
 
     const attributes: CredentialsSOAttributes = {
       primaryProvider: input.primary.provider,
       primaryModel: input.primary.model,
       primaryEndpoint: input.primary.endpoint,
-      primaryApiKey: pickKey(input.primary.apiKey, existing?.primaryApiKey),
+      primaryApiKey,
+      // Plaintext mirror of key presence: masked reads can't see the encrypted
+      // key, so they rely on this flag.
+      primaryHasKey: Boolean(primaryApiKey),
       fallbackEnabled,
       fallbackProvider: fallback?.provider,
       fallbackModel: fallback?.model,
       fallbackEndpoint: fallback?.endpoint,
-      fallbackApiKey: fallbackEnabled
-        ? pickKey(fallback?.apiKey, existing?.fallbackApiKey)
-        : undefined,
+      fallbackApiKey,
+      fallbackHasKey: Boolean(fallbackApiKey),
     };
 
     await client.create<CredentialsSOAttributes>(CREDENTIALS_SO_TYPE, attributes, {
@@ -144,7 +154,9 @@ export class CredentialsService {
             provider: attrs.fallbackProvider,
             model: attrs.fallbackModel ?? null,
             endpoint: attrs.fallbackEndpoint ?? null,
-            hasKey: Boolean(attrs.fallbackApiKey),
+            // The encrypted key is stripped from this non-decrypting read, so
+            // derive presence from the plaintext flag (fall back defensively).
+            hasKey: attrs.fallbackHasKey ?? Boolean(attrs.fallbackApiKey),
           }
         : null;
 
@@ -153,7 +165,7 @@ export class CredentialsService {
         provider: attrs.primaryProvider,
         model: attrs.primaryModel ?? null,
         endpoint: attrs.primaryEndpoint ?? null,
-        hasKey: Boolean(attrs.primaryApiKey),
+        hasKey: attrs.primaryHasKey ?? Boolean(attrs.primaryApiKey),
       },
       fallback,
     };
@@ -223,13 +235,32 @@ export class CredentialsService {
     }
   }
 
-  /** Loads raw (still-encrypted) attributes, or null when the SO is absent. */
+  /**
+   * Loads masked (non-decrypting) attributes, or null when the SO is absent.
+   * The encrypted `*ApiKey` fields are stripped from this read.
+   */
   private async readRaw(
     client: SavedObjectsClientContract,
     id: string
   ): Promise<CredentialsSOAttributes | null> {
     try {
       const so = await client.get<CredentialsSOAttributes>(CREDENTIALS_SO_TYPE, id);
+      return so.attributes;
+    } catch (error) {
+      if (SavedObjectsErrorHelpers.isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /** Loads DECRYPTED attributes (keys included) via ESO, or null when absent. */
+  private async readDecrypted(id: string): Promise<CredentialsSOAttributes | null> {
+    try {
+      const so = await this.esoClient.getDecryptedAsInternalUser<CredentialsSOAttributes>(
+        CREDENTIALS_SO_TYPE,
+        id
+      );
       return so.attributes;
     } catch (error) {
       if (SavedObjectsErrorHelpers.isNotFoundError(error)) {

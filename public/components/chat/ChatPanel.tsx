@@ -36,7 +36,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onOpenSettings }) => {
       hasShadow={false}
       hasBorder
       data-test-subj="queryCopilotChatPanel"
-      css={css({ display: 'flex', flexDirection: 'column', height: '100%' })}
+      // Compact FIXED-height chat window (~380px) laid out as a column. The panel
+      // does NOT grow with message count and is NOT editor-matched (no 100%/100vh,
+      // so the page doesn't scroll). The MessageThread inside is the scroll region
+      // (flex:1 + minHeight:0 + overflow-y:auto); ChatInput stays pinned at bottom.
+      css={css({ display: 'flex', flexDirection: 'column', height: 380 })}
     >
       <EuiFlexGroup
         alignItems="center"

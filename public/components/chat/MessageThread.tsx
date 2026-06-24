@@ -82,10 +82,11 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ messages, isGenera
 
   return (
     <div
-      // Compact conversation window: grows with content up to ~3-4 lines, then
-      // scrolls older messages. History is preserved — only the visible height
-      // is capped. `flexShrink:0` keeps it from being squashed by the input row.
-      css={css({ overflowY: 'auto', maxHeight: '9rem', flexShrink: 0, minHeight: 0 })}
+      // Fill the available vertical space in the chat panel (and scroll older
+      // messages) so the ChatInput is anchored at the bottom with no empty gap
+      // below it. `flex:1` grows to fill; `minHeight:0` lets it shrink so the
+      // overflow scroll engages instead of pushing the input down.
+      css={css({ overflowY: 'auto', flex: 1, minHeight: 0 })}
       data-test-subj="queryCopilotMessageThread"
     >
       <EuiFlexGroup direction="column" gutterSize="s" responsive={false}>

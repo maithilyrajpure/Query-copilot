@@ -46,16 +46,16 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({ left, right }) => {
 
   return (
     <EuiPage
+      grow={false}
       paddingSize="none"
       data-test-subj="queryCopilotSplitLayout"
-      css={css({ height: '100%', flex: 1 })}
+      css={css({ width: '100%', flexShrink: 0 })}
     >
-      <EuiPageBody paddingSize="none" css={css({ height: '100%', padding: euiTheme.size.l })}>
+      <EuiPageBody paddingSize="none" css={css({ padding: euiTheme.size.l })}>
         <EuiFlexGroup
           gutterSize="l"
           direction={isStacked ? 'column' : 'row'}
           responsive={false}
-          css={css({ height: '100%' })}
         >
           <EuiFlexItem grow={false} css={leftCss} data-test-subj="queryCopilotSplitLeft">
             {left}

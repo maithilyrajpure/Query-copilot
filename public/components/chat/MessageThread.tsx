@@ -82,7 +82,10 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ messages, isGenera
 
   return (
     <div
-      css={css({ overflowY: 'auto', flex: 1, minHeight: 0 })}
+      // Compact conversation window: grows with content up to ~3-4 lines, then
+      // scrolls older messages. History is preserved — only the visible height
+      // is capped. `flexShrink:0` keeps it from being squashed by the input row.
+      css={css({ overflowY: 'auto', maxHeight: '9rem', flexShrink: 0, minHeight: 0 })}
       data-test-subj="queryCopilotMessageThread"
     >
       <EuiFlexGroup direction="column" gutterSize="s" responsive={false}>

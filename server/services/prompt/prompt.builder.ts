@@ -67,10 +67,11 @@ export class PromptBuilder {
     intent: InvestigationIntent,
     context: SchemaContext,
     history: ConversationMessage[],
-    currentQuery?: string
+    currentQuery?: string,
+    indexPattern?: string
   ): ProviderPrompt {
     const systemPrompt = this.buildSystemPrompt(context);
-    const userMessage = this.buildUserMessage(intent, context, history, currentQuery);
+    const userMessage = this.buildUserMessage(intent, context, history, currentQuery, indexPattern);
     return { systemPrompt, userMessage, temperature: GENERATION_TEMPERATURE };
   }
 
@@ -124,7 +125,8 @@ export class PromptBuilder {
     intent: InvestigationIntent,
     context: SchemaContext,
     history: ConversationMessage[],
-    currentQuery?: string
+    currentQuery?: string,
+    indexPattern?: string
   ): string {
     // Prefer the explicit current query (the pipeline passes request.query). Only
     // fall back to digging the last user message out of history when no current
@@ -137,6 +139,7 @@ export class PromptBuilder {
 
     const sections: string[] = [];
     sections.push(this.formatFewShotExamples(intent.type));
+    sections.push(this.formatLanguageSelectionExamples());
 
     const historySection = this.formatHistory(priorMessages);
     if (historySection !== '') {
@@ -145,8 +148,15 @@ export class PromptBuilder {
 
     sections.push(`## Analyst request\n${analystQuery}`);
     sections.push(this.formatSchemaContext(context));
+    if (indexPattern && indexPattern.trim().length > 0) {
+      sections.push(
+        `## Target index pattern\n${indexPattern}\n` +
+          `If you choose ES|QL, begin the statement with: FROM ${indexPattern}`
+      );
+    }
     sections.push(
-      'Generate the KQL for the analyst request above, following your system instructions. Respond with only the JSON object.'
+      'Decide the language (KQL for filtering, ES|QL for aggregation) and generate the query for ' +
+        'the analyst request above, following your system instructions. Respond with only the JSON object.'
     );
 
     return sections.join('\n\n');
@@ -210,6 +220,30 @@ export class PromptBuilder {
       'their fields or values. Build your query from the "Target index schema" and ' +
       '"Known values" sections below, substituting the real fields/values for this index.';
     return `${header}\n${disclaimer}\n\n${blocks.join('\n\n')}`;
+  }
+
+  /**
+   * Renders the KQL-vs-ES|QL decision-rule examples so the model learns WHEN to
+   * switch languages. Each line shows the request, the chosen language, and the
+   * query in that language.
+   */
+  private formatLanguageSelectionExamples(): string {
+    const examples = this.templateRegistry.getLanguageSelectionExamples();
+    if (examples.length === 0) {
+      return '';
+    }
+    const header =
+      '## Language selection (KQL for filtering/retrieval, ES|QL for aggregation/analytics)';
+    const blocks = examples.map((ex, index) =>
+      [
+        `Example ${index + 1}:`,
+        `Request: ${ex.userQuery}`,
+        `language: ${ex.language}`,
+        `query: ${ex.query}`,
+        `Why: ${ex.explanation}`,
+      ].join('\n')
+    );
+    return `${header}\n${blocks.join('\n\n')}`;
   }
 
   /** Renders the most recent conversation turns; returns '' when there are none. */

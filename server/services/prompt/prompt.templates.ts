@@ -18,6 +18,66 @@ export interface FewShotExample {
 }
 
 /**
+ * A language-selection few-shot: an analyst request paired with the language the
+ * model should choose ("kql" for filtering, "esql" for aggregation) and the query
+ * it should produce. Used to teach the KQL-vs-ES|QL decision rule by contrast.
+ */
+export interface LanguageExample {
+  readonly userQuery: string;
+  readonly language: 'kql' | 'esql';
+  readonly query: string;
+  readonly explanation: string;
+}
+
+/**
+ * Few-shots demonstrating WHEN to choose KQL vs ES|QL. Always injected so the
+ * model learns the decision rule regardless of investigation type. ES|QL FROM
+ * clauses use a generic pattern; the prompt instructs the model to substitute the
+ * real target index pattern.
+ */
+const LANGUAGE_SELECTION_EXAMPLES: readonly LanguageExample[] = [
+  {
+    userQuery: 'Show me all failed login attempts',
+    language: 'kql',
+    query: 'event.outcome : "failure" and event.action : "login"',
+    explanation: 'A retrieval/filtering request — return the matching events. Use KQL.',
+  },
+  {
+    userQuery: 'How many failed logins are there?',
+    language: 'esql',
+    query:
+      'FROM logs-* | WHERE event.outcome == "failure" AND event.action == "login" | STATS count = COUNT(*)',
+    explanation: 'A count — an aggregation KQL cannot express. Use ES|QL with STATS COUNT(*).',
+  },
+  {
+    userQuery: 'Count failed logins per user',
+    language: 'esql',
+    query:
+      'FROM logs-* | WHERE event.outcome == "failure" | STATS count = COUNT(*) BY user.name | SORT count DESC',
+    explanation: 'Grouping by a field ("per user") — aggregation. Use ES|QL STATS ... BY user.name.',
+  },
+  {
+    userQuery: 'Top 10 source IPs by number of failures',
+    language: 'esql',
+    query:
+      'FROM logs-* | WHERE event.outcome == "failure" | STATS failures = COUNT(*) BY source.ip | SORT failures DESC | LIMIT 10',
+    explanation: 'A top-N ranking — aggregate, sort by the computed count, and limit. Use ES|QL.',
+  },
+  {
+    userQuery: 'Break down events by module',
+    language: 'esql',
+    query: 'FROM logs-* | STATS count = COUNT(*) BY event.module | SORT count DESC',
+    explanation: 'A breakdown/distribution over a field — aggregation. Use ES|QL STATS ... BY event.module.',
+  },
+  {
+    userQuery: 'Find events from source IP 10.0.0.5',
+    language: 'kql',
+    query: 'source.ip : "10.0.0.5"',
+    explanation: 'A straightforward filter for matching events. Use KQL.',
+  },
+];
+
+/**
  * Curated few-shot examples keyed by investigation type.
  *
  * The {@link Record} type makes this map compile-time exhaustive: adding a new
@@ -186,5 +246,10 @@ export class PromptTemplateRegistry {
   /** Returns every configured example across all investigation types. */
   public getAllExamples(): FewShotExample[] {
     return Object.values(FEW_SHOT_EXAMPLES).flatMap((examples) => [...examples]);
+  }
+
+  /** Returns the KQL-vs-ES|QL language-selection examples (decision-rule contrast). */
+  public getLanguageSelectionExamples(): LanguageExample[] {
+    return [...LANGUAGE_SELECTION_EXAMPLES];
   }
 }

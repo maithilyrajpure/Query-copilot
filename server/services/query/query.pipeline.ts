@@ -280,7 +280,8 @@ export class QueryPipeline {
         intent,
         schemaContext,
         history,
-        request.query
+        request.query,
+        request.indexPattern
       );
       ctx.addStage({ stage: 'query_generation', durationMs: Date.now() - tPrompt, success: true });
 
@@ -359,8 +360,15 @@ export class QueryPipeline {
       ctx.addStage({ stage: 'response_parse', durationMs: Date.now() - tParse, success: true });
 
       // ── 8. Validate ───────────────────────────────────────────────────
+      // ES|QL is NOT KQL: running the kuery syntax checker on an ES|QL statement
+      // would wrongly fail it (and trip the correction loop). For now ES|QL skips
+      // local validation and is validated by Elasticsearch at execution time; a
+      // real ES|QL syntax check arrives in a later phase.
       const tValidate = Date.now();
-      let validation: ValidationResult = this.validator.validate(generatedKQL, schemaContext);
+      let validation: ValidationResult =
+        generatedLanguage === QUERY_LANGUAGES.ESQL
+          ? this.esqlPassthroughValidation()
+          : this.validator.validate(generatedKQL, schemaContext);
       const validationDurationMs = Date.now() - tValidate;
       ctx.addStage({
         stage: 'validation',
@@ -568,6 +576,26 @@ export class QueryPipeline {
       providerUsed: provider,
       tokensUsed,
       promptVersion: SYSTEM_PROMPT_VERSION,
+    };
+  }
+
+  /**
+   * Pass-through validation for ES|QL: the local validator only understands KQL,
+   * so an ES|QL statement is treated as valid here and left for Elasticsearch to
+   * reject at execution time if malformed. A dedicated ES|QL syntax check is a
+   * later phase.
+   */
+  private esqlPassthroughValidation(): ValidationResult {
+    return {
+      valid: true,
+      syntaxErrors: [],
+      fieldErrors: [],
+      warnings: [
+        'ES|QL syntax validation is deferred; the query is validated by Elasticsearch on execution.',
+      ],
+      ecsFieldsUsed: [],
+      totalFieldsInQuery: 0,
+      ecsFieldCoverage: '0/0',
     };
   }
 

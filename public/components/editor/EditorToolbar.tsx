@@ -28,7 +28,12 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ isEditing, onToggl
   const handleTimeChange = ({ start, end }: OnTimeChangeProps): void => {
     dispatch(setTimeRange({ from: start, to: end }));
     if (state.currentKQL.trim().length > 0) {
-      void executeQuery(state.currentKQL, state.indexPattern, { from: start, to: end });
+      void executeQuery(
+        state.currentKQL,
+        state.indexPattern,
+        { from: start, to: end },
+        state.validationResult?.language
+      );
     }
   };
 
@@ -60,7 +65,12 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ isEditing, onToggl
           onTimeChange={handleTimeChange}
           onRefresh={({ start, end }) => {
             dispatch(setTimeRange({ from: start, to: end }));
-            void executeQuery(state.currentKQL, state.indexPattern, { from: start, to: end });
+            void executeQuery(
+        state.currentKQL,
+        state.indexPattern,
+        { from: start, to: end },
+        state.validationResult?.language
+      );
           }}
           data-test-subj="queryCopilotTimePicker"
         />
@@ -85,7 +95,12 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({ isEditing, onToggl
           isLoading={isExecuting}
           disabled={isExecuting || state.currentKQL.trim().length === 0}
           onClick={() => {
-            void executeQuery(state.currentKQL, state.indexPattern, state.timeRange);
+            void executeQuery(
+              state.currentKQL,
+              state.indexPattern,
+              state.timeRange,
+              state.validationResult?.language
+            );
           }}
           data-test-subj="queryCopilotEditorRunButton"
         >

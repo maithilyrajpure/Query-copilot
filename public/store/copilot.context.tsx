@@ -159,7 +159,8 @@ export function CopilotProvider({ children, indexPattern, sessionId }: CopilotPr
       const results = await services.queryApi.executeQuery(
         kql,
         stateRef.current.indexPattern,
-        stateRef.current.timeRange
+        stateRef.current.timeRange,
+        stateRef.current.validationResult?.language
       );
       dispatch(setQueryResults(results));
     } catch (e) {

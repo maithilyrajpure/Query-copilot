@@ -2,6 +2,7 @@ import type {
   QueryGenerationRequest,
   QueryGenerationResponse,
   QueryExecutionResponse,
+  QueryLanguage,
   TimeRange,
   TokenEstimateProviderSpec,
   TokenEstimateResponse,
@@ -18,12 +19,15 @@ export class QueryApiService extends ApiClient {
   public async executeQuery(
     kql: string,
     indexPattern: string,
-    timeRange?: TimeRange
+    timeRange?: TimeRange,
+    language?: QueryLanguage
   ): Promise<QueryExecutionResponse> {
     return this.post<QueryExecutionResponse>(`${PLUGIN_ROUTE_PREFIX}/execute`, {
       kql,
       indexPattern,
       ...(timeRange ? { timeRange } : {}),
+      // Forward the generated language so the server runs the ES|QL path when esql.
+      ...(language ? { language } : {}),
     });
   }
 

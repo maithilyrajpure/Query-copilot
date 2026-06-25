@@ -353,7 +353,9 @@ export class QueryPipeline {
 
       // ── 7. Parse response JSON ────────────────────────────────────────
       const tParse = Date.now();
-      const generatedKQL = this.extractKql(response.content);
+      const { query: generatedKQL, language: generatedLanguage } = this.extractKql(
+        response.content
+      );
       ctx.addStage({ stage: 'response_parse', durationMs: Date.now() - tParse, success: true });
 
       // ── 8. Validate ───────────────────────────────────────────────────
@@ -433,7 +435,8 @@ export class QueryPipeline {
         generatedKQL,
         serviceAttempts,
         response.provider,
-        tokenEstimate.totalTokens
+        tokenEstimate.totalTokens,
+        generatedLanguage
       );
       const finalQuery = drafts.length > 0 ? drafts[drafts.length - 1]! : null;
 
@@ -444,7 +447,11 @@ export class QueryPipeline {
         intent,
         drafts,
         finalQuery,
-        validationResult: this.mapValidationResult(validation, validationDurationMs),
+        validationResult: this.mapValidationResult(
+          validation,
+          validationDurationMs,
+          generatedLanguage
+        ),
         correctionAttempts: this.mapCorrectionAttempts(serviceAttempts, generatedKQL),
         providerResponses: [this.mapProviderResponse(response, requestId)],
         tokenEstimate,
@@ -521,10 +528,11 @@ export class QueryPipeline {
     initialKQL: string,
     attempts: readonly CorrectionAttempt[],
     provider: ProviderName,
-    tokensUsed: number
+    tokensUsed: number,
+    language: QueryLanguage
   ): QueryDraft[] {
     const drafts: QueryDraft[] = [
-      this.buildDraft(analystQueryId, initialKQL, 0, provider, tokensUsed),
+      this.buildDraft(analystQueryId, initialKQL, 0, provider, tokensUsed, language),
     ];
     for (const attempt of attempts) {
       drafts.push(
@@ -533,7 +541,8 @@ export class QueryPipeline {
           attempt.generatedKQL,
           attempt.attemptNumber,
           attempt.providerUsed,
-          0
+          0,
+          language
         )
       );
     }
@@ -546,12 +555,13 @@ export class QueryPipeline {
     queryString: string,
     generationAttempt: number,
     provider: ProviderName,
-    tokensUsed: number
+    tokensUsed: number,
+    language: QueryLanguage
   ): QueryDraft {
     return {
       id: randomUUID(),
       analystQueryId,
-      language: QUERY_LANGUAGES.KQL,
+      language,
       queryString,
       generatedAt: new Date().toISOString(),
       generationAttempt,
@@ -564,7 +574,8 @@ export class QueryPipeline {
   /** Maps the validation service's result onto the common `ValidationResult`. */
   private mapValidationResult(
     result: ValidationResult,
-    durationMs: number
+    durationMs: number,
+    language: QueryLanguage
   ): CommonValidationResult {
     const warnings: CommonValidationError[] = result.warnings.map(
       (message): CommonValidationError => ({
@@ -580,7 +591,7 @@ export class QueryPipeline {
 
     return {
       isValid: result.valid,
-      language: QUERY_LANGUAGES.KQL,
+      language,
       errors: this.mapValidationErrors(result),
       warnings,
       validatedAt: new Date().toISOString(),
@@ -703,14 +714,30 @@ export class QueryPipeline {
    * Markdown code fences or include surrounding prose; if no JSON object with a
    * string `kql` can be recovered, the stripped content is returned as-is.
    */
-  private extractKql(content: string): string {
+  private extractKql(content: string): { query: string; language: QueryLanguage } {
     const text = this.stripCodeFences((content ?? '').trim());
     const obj =
       this.tryParseObject(text) ?? this.tryParseObject(this.extractFirstJsonObject(text));
+    const language = this.parseLanguage(obj);
     if (obj && typeof obj.kql === 'string') {
-      return obj.kql;
+      return { query: obj.kql, language };
     }
-    return text;
+    return { query: text, language };
+  }
+
+  /**
+   * Reads an OPTIONAL `language` key from the parsed model JSON, validated
+   * against {@link QUERY_LANGUAGES}. Defaults to KQL when absent or unrecognised.
+   * The model does not emit this field yet (the prompt is unchanged), so today
+   * this always resolves to KQL — purely carrying the language contract forward.
+   */
+  private parseLanguage(obj: Record<string, unknown> | null): QueryLanguage {
+    const raw = obj?.language;
+    const values = Object.values(QUERY_LANGUAGES) as string[];
+    if (typeof raw === 'string' && values.includes(raw)) {
+      return raw as QueryLanguage;
+    }
+    return QUERY_LANGUAGES.KQL;
   }
 
   /** Removes a leading ```/```json fence and a trailing ``` fence, then trims. */

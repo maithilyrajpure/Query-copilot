@@ -1,3 +1,5 @@
+import type { QueryLanguage } from '../constants';
+
 /** Absolute or ES-date-math time window applied to a query. */
 export interface TimeRange {
   readonly from: string; // ISO 8601 or ES date math (e.g. "now-24h")
@@ -29,4 +31,9 @@ export interface QueryExecutionParams {
   readonly indexPattern: string;
   readonly timeRange?: TimeRange;
   readonly maxResults?: number; // default 100
+  /**
+   * Query language of `kql`. Optional and treated as KQL when absent — carried
+   * for the ES|QL language contract; execution still runs KQL until a later phase.
+   */
+  readonly language?: QueryLanguage;
 }

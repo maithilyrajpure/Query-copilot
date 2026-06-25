@@ -51,6 +51,9 @@ export const QUERY_LANGUAGES = {
   EQL: 'eql',
   DSL: 'dsl',
   ES_SQL: 'es_sql',
+  // ES|QL (the piped query language, _query endpoint) — distinct from ES_SQL
+  // (Elasticsearch SQL). Added for the ES|QL language contract; not yet acted on.
+  ESQL: 'esql',
 } as const;
 
 export type QueryLanguage = (typeof QUERY_LANGUAGES)[keyof typeof QUERY_LANGUAGES];

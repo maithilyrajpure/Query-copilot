@@ -4,7 +4,7 @@ import type { IRouter } from '@kbn/core/server';
 import { KQLSyntaxError } from '@kbn/es-query';
 import type { QueryCopilotContext } from '../types';
 import { QueryExecutorService } from '../services/execution';
-import { PLUGIN_ROUTE_PREFIX } from '../../common';
+import { PLUGIN_ROUTE_PREFIX, QUERY_LANGUAGES } from '../../common';
 
 /** Request body for POST /execute. */
 const executeRequestBodySchema = schema.object({
@@ -15,6 +15,18 @@ const executeRequestBodySchema = schema.object({
       from: schema.string({ minLength: 1 }),
       to: schema.string({ minLength: 1 }),
     })
+  ),
+  // Optional query language; defaults to KQL when absent so existing requests
+  // behave identically. Carried only — not yet acted upon (KQL execution).
+  language: schema.oneOf(
+    [
+      schema.literal(QUERY_LANGUAGES.KQL),
+      schema.literal(QUERY_LANGUAGES.EQL),
+      schema.literal(QUERY_LANGUAGES.DSL),
+      schema.literal(QUERY_LANGUAGES.ES_SQL),
+      schema.literal(QUERY_LANGUAGES.ESQL),
+    ],
+    { defaultValue: QUERY_LANGUAGES.KQL }
   ),
 });
 
@@ -50,6 +62,8 @@ export function registerExecutionRoutes(router: IRouter, context: QueryCopilotCo
           kql: body.kql,
           indexPattern: body.indexPattern,
           timeRange: body.timeRange,
+          // Carried through to QueryExecutionParams; execution still runs KQL.
+          language: body.language,
         };
 
         let result;

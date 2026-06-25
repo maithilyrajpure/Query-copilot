@@ -21,11 +21,13 @@
  * is intentional — the two types model different things.
  */
 
-import type { ECSField } from '../../../common/types';
+import type { ECSField, QueryLanguage } from '../../../common/types';
+import { QUERY_LANGUAGES } from '../../../common';
 import type { SchemaContext } from '../schema';
 import { ECSRegistry } from '../schema';
 import { KQLSyntaxChecker } from './syntax.checker';
 import type { SyntaxError } from './syntax.checker';
+import { ESQLSyntaxChecker } from './esql.syntax.checker';
 import { FieldValidator } from './field.validator';
 import type { FieldValidationError } from './field.validator';
 
@@ -67,11 +69,17 @@ export interface ValidationResult {
  */
 export class KQLValidatorService {
   private readonly syntaxChecker: KQLSyntaxChecker;
+  private readonly esqlSyntaxChecker: ESQLSyntaxChecker;
   private readonly fieldValidator: FieldValidator;
 
-  constructor(syntaxChecker?: KQLSyntaxChecker, fieldValidator?: FieldValidator) {
+  constructor(
+    syntaxChecker?: KQLSyntaxChecker,
+    fieldValidator?: FieldValidator,
+    esqlSyntaxChecker?: ESQLSyntaxChecker
+  ) {
     this.syntaxChecker = syntaxChecker ?? new KQLSyntaxChecker();
     this.fieldValidator = fieldValidator ?? new FieldValidator();
+    this.esqlSyntaxChecker = esqlSyntaxChecker ?? new ESQLSyntaxChecker();
   }
 
   /**
@@ -84,11 +92,21 @@ export class KQLValidatorService {
    *
    * NEVER throws.
    *
-   * @param kql the KQL expression to validate
+   * @param kql the query expression to validate
    * @param schemaContext the relevant ECS fields and target index mapping
+   * @param language the query language; defaults to KQL. When ESQL, only a
+   *   synchronous ES|QL SYNTAX check runs (no KQL field validation).
    * @returns a combined {@link ValidationResult}
    */
-  validate(kql: string, schemaContext: SchemaContext): ValidationResult {
+  validate(
+    kql: string,
+    schemaContext: SchemaContext,
+    language: QueryLanguage = QUERY_LANGUAGES.KQL
+  ): ValidationResult {
+    if (language === QUERY_LANGUAGES.ESQL) {
+      return this.validateEsqlSyntax(kql);
+    }
+
     const syntax = this.syntaxChecker.check(kql);
     if (!syntax.valid) {
       return {
@@ -141,6 +159,24 @@ export class KQLValidatorService {
       ecsFieldsUsed,
       totalFieldsInQuery,
       ecsFieldCoverage: `${ecsFieldsUsed.length}/${totalFieldsInQuery}`,
+    };
+  }
+
+  /**
+   * Synchronous ES|QL SYNTAX validation via {@link ESQLSyntaxChecker}. Unlike the
+   * KQL path there is no field validation (the ES|QL field-validation API is
+   * async and out of scope); Elasticsearch validates semantics on execution.
+   */
+  private validateEsqlSyntax(esql: string): ValidationResult {
+    const syntax = this.esqlSyntaxChecker.check(esql);
+    return {
+      valid: syntax.valid,
+      syntaxErrors: syntax.errors,
+      fieldErrors: [],
+      warnings: [],
+      ecsFieldsUsed: [],
+      totalFieldsInQuery: 0,
+      ecsFieldCoverage: '0/0',
     };
   }
 

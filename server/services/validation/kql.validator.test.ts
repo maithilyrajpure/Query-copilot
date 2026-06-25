@@ -7,6 +7,7 @@ function makeContext(availableIndexFields: string[]): SchemaContext {
     relevantECSFields: ECSRegistry.getFieldsByInvestigationType('brute_force'),
     availableIndexFields,
     fieldOverlap: [],
+    fieldValues: new Map(),
   };
 }
 

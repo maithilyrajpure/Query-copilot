@@ -360,15 +360,14 @@ export class QueryPipeline {
       ctx.addStage({ stage: 'response_parse', durationMs: Date.now() - tParse, success: true });
 
       // ── 8. Validate ───────────────────────────────────────────────────
-      // ES|QL is NOT KQL: running the kuery syntax checker on an ES|QL statement
-      // would wrongly fail it (and trip the correction loop). For now ES|QL skips
-      // local validation and is validated by Elasticsearch at execution time; a
-      // real ES|QL syntax check arrives in a later phase.
+      // The validator branches on language: KQL runs the kuery syntax + field
+      // check (unchanged); ES|QL runs a synchronous ES|QL syntax check.
       const tValidate = Date.now();
-      let validation: ValidationResult =
-        generatedLanguage === QUERY_LANGUAGES.ESQL
-          ? this.esqlPassthroughValidation()
-          : this.validator.validate(generatedKQL, schemaContext);
+      let validation: ValidationResult = this.validator.validate(
+        generatedKQL,
+        schemaContext,
+        generatedLanguage
+      );
       const validationDurationMs = Date.now() - tValidate;
       ctx.addStage({
         stage: 'validation',
@@ -380,7 +379,10 @@ export class QueryPipeline {
       // ── 9. Correct (if needed) ────────────────────────────────────────
       let serviceAttempts: readonly CorrectionAttempt[] = [];
       let correctionSucceeded = true;
-      if (!validation.valid) {
+      // The correction engine re-prompts and re-validates as KQL, so it only
+      // runs for KQL. A malformed ES|QL query is reported as a syntax failure
+      // directly (its real ES|QL parse error), not run through KQL correction.
+      if (!validation.valid && generatedLanguage !== QUERY_LANGUAGES.ESQL) {
         const tCorrect = Date.now();
         const correction = await this.correctionEngine.correct({
           originalPrompt: prompt,
@@ -576,26 +578,6 @@ export class QueryPipeline {
       providerUsed: provider,
       tokensUsed,
       promptVersion: SYSTEM_PROMPT_VERSION,
-    };
-  }
-
-  /**
-   * Pass-through validation for ES|QL: the local validator only understands KQL,
-   * so an ES|QL statement is treated as valid here and left for Elasticsearch to
-   * reject at execution time if malformed. A dedicated ES|QL syntax check is a
-   * later phase.
-   */
-  private esqlPassthroughValidation(): ValidationResult {
-    return {
-      valid: true,
-      syntaxErrors: [],
-      fieldErrors: [],
-      warnings: [
-        'ES|QL syntax validation is deferred; the query is validated by Elasticsearch on execution.',
-      ],
-      ecsFieldsUsed: [],
-      totalFieldsInQuery: 0,
-      ecsFieldCoverage: '0/0',
     };
   }
 
